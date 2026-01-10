@@ -4,11 +4,11 @@ Default permissions for the plugin
 
 #### This default permission set includes the following:
 
-- `allow-request_camera_permission`
-- `allow-get_available_cameras`
-- `allow-start_streaming`
-- `allow-stop_streaming`
-- `allow-initialize`
+- `allow_request_camera_permission`
+- `allow_get_available_cameras`
+- `allow_start_streaming`
+- `allow_stop_streaming`
+- `allow_initialize`
 
 ## Permission Table
 
@@ -27,7 +27,7 @@ Default permissions for the plugin
 </td>
 <td>
 
-Enables the get-available-cameras command without any pre-configured scope.
+Enables the get_available_cameras command without any pre-configured scope.
 
 </td>
 </tr>
@@ -40,7 +40,7 @@ Enables the get-available-cameras command without any pre-configured scope.
 </td>
 <td>
 
-Denies the get-available-cameras command without any pre-configured scope.
+Denies the get_available_cameras command without any pre-configured scope.
 
 </td>
 </tr>
@@ -79,7 +79,7 @@ Denies the initialize command without any pre-configured scope.
 </td>
 <td>
 
-Enables the request-camera-permission command without any pre-configured scope.
+Enables the request_camera_permission command without any pre-configured scope.
 
 </td>
 </tr>
@@ -92,7 +92,7 @@ Enables the request-camera-permission command without any pre-configured scope.
 </td>
 <td>
 
-Denies the request-camera-permission command without any pre-configured scope.
+Denies the request_camera_permission command without any pre-configured scope.
 
 </td>
 </tr>
@@ -105,7 +105,7 @@ Denies the request-camera-permission command without any pre-configured scope.
 </td>
 <td>
 
-Enables the start-streaming command without any pre-configured scope.
+Enables the start_streaming command without any pre-configured scope.
 
 </td>
 </tr>
@@ -118,7 +118,7 @@ Enables the start-streaming command without any pre-configured scope.
 </td>
 <td>
 
-Denies the start-streaming command without any pre-configured scope.
+Denies the start_streaming command without any pre-configured scope.
 
 </td>
 </tr>
@@ -131,7 +131,7 @@ Denies the start-streaming command without any pre-configured scope.
 </td>
 <td>
 
-Enables the stop-streaming command without any pre-configured scope.
+Enables the stop_streaming command without any pre-configured scope.
 
 </td>
 </tr>
@@ -144,7 +144,7 @@ Enables the stop-streaming command without any pre-configured scope.
 </td>
 <td>
 
-Denies the stop-streaming command without any pre-configured scope.
+Denies the stop_streaming command without any pre-configured scope.
 
 </td>
 </tr>

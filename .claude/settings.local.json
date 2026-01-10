@@ -4,7 +4,8 @@
       "Skill(init)",
       "Skill(init:*)",
       "Bash(cargo build:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(ls \"C:\\\\Programmation\\\\eye-tracker\\\\src-tauri\\\\capabilities\"\" 2>/dev/null || echo \"No capabilities folder \")"
     ]
   }
 }

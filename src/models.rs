@@ -27,7 +27,7 @@ pub struct CameraFormat {
 #[serde(rename_all = "camelCase")]
 pub struct FrameEvent {
     pub frame_id: u64,
-
+    #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
     pub width: u32,
     pub height: u32,

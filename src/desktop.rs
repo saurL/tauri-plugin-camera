@@ -28,6 +28,7 @@ struct ActiveStream {
     camera_id: String,
     start_time: Instant,
     frame_counter: Arc<std::sync::atomic::AtomicU64>,
+    channel: Channel<crate::models::FrameEvent>,
 }
 
 /// Access to the camera APIs.
@@ -59,15 +60,23 @@ impl<R: Runtime> Camera<R> {
         Ok(devices)
     }
 
-    pub async fn start_stream_default_camera(&self) -> Result<()> {
+    pub async fn start_stream_default_camera(
+        &self,
+        on_frame: Channel<crate::models::FrameEvent>,
+    ) -> Result<String> {
         let devices = self.get_available_cameras().await?;
         if let Some(camera) = devices.first() {
-            self.start_stream(camera.id.clone()).await?;
+            self.start_stream(camera.id.clone(), on_frame).await
+        } else {
+            Err(Error::CameraError("No camera devices found".to_string()))
         }
-        Ok(())
     }
 
-    pub async fn start_stream(&self, device_id: String) -> Result<()> {
+    pub async fn start_stream(
+        &self,
+        device_id: String,
+        on_frame: Channel<crate::models::FrameEvent>,
+    ) -> Result<String> {
         // Check if streaming is already active for this device
         {
             let streams = self.active_streams.lock().await;
@@ -85,7 +94,41 @@ impl<R: Runtime> Camera<R> {
             .await
             .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
 
-        let clone_id = device_id.clone();
+        let frame_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let counter_clone = frame_counter.clone();
+        let channel_clone = on_frame.clone();
+
+        let callback = move |frame: crabcamera::CameraFrame| {
+            let rgb_data = match frame.format.as_str() {
+                "RGB8" => frame.data,
+                "YUV" => yuv_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
+                "NV12" => nv12_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
+                _ => {
+                    log::error!("Unsupported frame format: {}", frame.format);
+                    return;
+                }
+            };
+
+            let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let timestamp_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+
+            let frame_event = crate::models::FrameEvent {
+                frame_id,
+                data: rgb_data,
+                width: frame.width,
+                height: frame.height,
+                timestamp_ms,
+                format: "RGB8".to_string(),
+            };
+
+            if let Err(e) = channel_clone.send(frame_event) {
+                log::error!("Failed to send frame through channel: {}", e);
+            }
+        };
+
         set_callback(device_id.clone(), callback)
             .await
             .map_err(|e| Error::CameraError(format!("Failed to set callback: {}", e)))?;
@@ -94,7 +137,8 @@ impl<R: Runtime> Camera<R> {
         let active_stream = ActiveStream {
             camera_id: camera,
             start_time: Instant::now(),
-            frame_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            frame_counter,
+            channel: on_frame,
         };
 
         self.active_streams
@@ -102,25 +146,6 @@ impl<R: Runtime> Camera<R> {
             .await
             .insert(session_id.clone(), active_stream);
 
-        Ok(())
+        Ok(session_id)
     }
-}
-
-fn callback(frame: crabcamera::CameraFrame) {
-    let rgb_data = match frame.format.as_str() {
-        "RGB8" => frame.data,
-        "YUV" => yuv_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
-        "NV12" => nv12_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
-        _ => {
-            log::error!("Unsupported frame format: {}", frame.format);
-            return;
-        }
-    };
-    log::info!(
-        "Received frame: {}x{}, size: {} bytes, initial format: {}",
-        frame.width,
-        frame.height,
-        rgb_data.len(),
-        frame.format
-    );
 }

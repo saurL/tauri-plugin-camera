@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Skill(init)",
-      "Skill(init:*)"
+      "Skill(init:*)",
+      "Bash(cargo build:*)",
+      "Bash(test:*)"
     ]
   }
 }

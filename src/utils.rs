@@ -1,6 +1,6 @@
 use yuv::{
-    YuvBiPlanarImageMut, YuvChromaSubsampling, YuvConversionMode, YuvPlanarImage,
-    YuvPlanarImageMut, YuvRange, YuvStandardMatrix,
+    YuvBiPlanarImageMut, YuvChromaSubsampling, YuvConversionMode, YuvPlanarImageMut, YuvRange,
+    YuvStandardMatrix,
 };
 
 /// Utility functions for image format conversion and processing
@@ -31,7 +31,7 @@ pub fn yuv_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     let planar_image = planar_image_mut.to_fixed();
     let rgb_data_size = (width * height * 3) as usize;
     let mut rgb_data = vec![0u8; rgb_data_size];
-    let rgba_stride = (width * 3);
+    let rgba_stride = width * 3;
     // Convert using yuv crate
     yuv::yuv420_to_rgb(
         &planar_image,

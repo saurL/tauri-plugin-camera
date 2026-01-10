@@ -43,10 +43,18 @@ export async function ping(value: string): Promise<string | null> {
 }
 
 /**
+ * Request camera permission from the system
+ * @returns Promise with true if permission granted, false otherwise
+ */
+export async function requestCameraPermission(): Promise<boolean> {
+  return await invoke<boolean>('plugin:camera|request_camera_permission');
+}
+
+/**
  * List all available camera devices
  */
-export async function listDevices(): Promise<CameraDeviceInfo[]> {
-  return await invoke<CameraDeviceInfo[]>('plugin:camera|list_devices');
+export async function getAvailableCameras(): Promise<CameraDeviceInfo[]> {
+  return await invoke<CameraDeviceInfo[]>('plugin:camera|get_available_cameras');
 }
 
 /**

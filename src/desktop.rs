@@ -10,6 +10,7 @@ use crate::error::{Error, Result};
 
 use crabcamera::{
     get_available_cameras, get_recommended_format, set_callback, start_camera_preview,
+    request_camera_permission,
 };
 
 pub fn init<R: Runtime, C: DeserializeOwned>(
@@ -35,6 +36,13 @@ pub struct Camera<R: Runtime> {
 }
 
 impl<R: Runtime> Camera<R> {
+    /// Request camera permission from the system
+    pub async fn request_permission(&self) -> Result<bool> {
+        request_camera_permission()
+            .await
+            .map_err(|e| Error::CameraError(format!("Failed to request camera permission: {}", e)))
+    }
+
     /// List all available camera devices
     pub async fn get_available_cameras(&self) -> Result<Vec<CameraDeviceInfo>> {
         let devices = get_available_cameras()

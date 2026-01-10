@@ -35,7 +35,11 @@ impl<R: Runtime, T: Manager<R>> crate::CameraExt<R> for T {
 /// Initializes the plugin.
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("camera")
-        .invoke_handler(tauri::generate_handler![])
+        .invoke_handler(tauri::generate_handler![
+            commands::ping,
+            commands::request_camera_permission,
+            commands::get_available_cameras,
+        ])
         .setup(|app, api| {
             #[cfg(mobile)]
             let camera = mobile::init(app, api)?;

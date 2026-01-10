@@ -27,7 +27,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 struct ActiveStream {
     camera_id: String,
     start_time: Instant,
-
+    frame_counter: Arc<std::sync::atomic::AtomicU64>,
     channel: Channel<crate::models::FrameEvent>,
 }
 
@@ -94,8 +94,14 @@ impl<R: Runtime> Camera<R> {
             .await
             .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
 
+        let frame_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let counter_clone = frame_counter.clone();
         let channel_clone = channel.clone();
+
         let callback = move |frame: crabcamera::CameraFrame| {
+            let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let receive_time = std::time::Instant::now();
+
             // Clone channel for this frame so callback can be FnMut
             let frame_channel = channel_clone.clone();
 
@@ -103,7 +109,9 @@ impl<R: Runtime> Camera<R> {
             spawn(async move {
                 // Log frame info BEFORE conversion
                 log::info!(
-                    "📹 Received frame : {}x{}, format: {}, data size: {} bytes",
+                    "📹 Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
+                    frame_id,
+                    receive_time,
                     frame.width,
                     frame.height,
                     frame.format,
@@ -198,6 +206,7 @@ impl<R: Runtime> Camera<R> {
                     .as_millis() as u64;
 
                 let frame_event = crate::models::FrameEvent {
+                    frame_id,
                     data: rgb_data,
                     width: frame.width,
                     height: frame.height,
@@ -205,10 +214,18 @@ impl<R: Runtime> Camera<R> {
                     format: "RGB8".to_string(),
                 };
 
+                let send_time = std::time::Instant::now();
+                let processing_duration = send_time.duration_since(receive_time);
+
                 if let Err(e) = frame_channel.send(frame_event) {
-                    log::error!("❌ Failed to send frame through channel: {}", e);
+                    log::error!("❌ Frame #{} failed to send: {}", frame_id, e);
                 } else {
-                    log::debug!("✅ Frame sent successfully");
+                    log::info!(
+                        "✅ Frame #{} sent at {:?} (processing took {:?})",
+                        frame_id,
+                        send_time,
+                        processing_duration
+                    );
                 }
             });
         };
@@ -221,8 +238,8 @@ impl<R: Runtime> Camera<R> {
         let active_stream = ActiveStream {
             camera_id: camera,
             start_time: Instant::now(),
-
-            channel: channel,
+            frame_counter,
+            channel,
         };
 
         self.active_streams

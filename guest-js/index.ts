@@ -1,5 +1,5 @@
 import { invoke, Channel } from '@tauri-apps/api/core'
-
+import {info} from "@tauri-apps/plugin-log"
 // Backend types -------------------------------------------------------------
 export type Platform = 'Windows' | 'MacOS' | 'Linux' | 'Unknown'
 
@@ -124,7 +124,17 @@ export async function startStreaming(
 ): Promise<string> {
   // Use a Tauri Channel for ordered, low-latency frame delivery.
   const channel = new Channel<FrameEvent>()
-  channel.onmessage = onFrame
+  channel.onmessage = (frame) => {
+    const receiveTime = performance.now()
+    info(`[TS] 📥 Frame #${frame.frameId} received at ${receiveTime.toFixed(2)}ms`)
+    info(`[TS] Frame data: ${frame.width}x${frame.height}, ${frame.data.length} bytes, format: ${frame.format}`)
+
+    const processStart = performance.now()
+    onFrame(frame)
+    const processDuration = performance.now() - processStart
+
+    info(`[TS] ✅ Frame #${frame.frameId} processed in ${processDuration.toFixed(2)}ms`)
+  }
 
   return invoke<string>('plugin:camera|start_streaming', {
     deviceId,

@@ -1,18 +1,18 @@
 use crate::error::{Error, Result};
+use crate::utils::{nv12_to_rgb, yuv_to_rgb};
 use crabcamera::init::initialize_camera_system;
 use crabcamera::permissions::PermissionInfo;
 use crabcamera::CameraDeviceInfo;
+use crabcamera::{
+    get_available_cameras, get_recommended_format, request_camera_permission, set_callback,
+    start_camera_preview,
+};
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tauri::{ipc::Channel, plugin::PluginApi, AppHandle, Runtime};
 use tokio::sync::Mutex as AsyncMutex;
-
-use crabcamera::{
-    get_available_cameras, get_recommended_format, request_camera_permission, set_callback,
-    start_camera_preview,
-};
 
 pub fn init<R: Runtime, C: DeserializeOwned>(
     app: &AppHandle<R>,
@@ -86,19 +86,9 @@ impl<R: Runtime> Camera<R> {
             .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
 
         let clone_id = device_id.clone();
-        set_callback(device_id.clone(), move |frame: crabcamera::CameraFrame| {
-            // Here you can handle the incoming frame data
-            log::info!(
-                "Received frame from camera {}: {}x{} format {}",
-                clone_id,
-                frame.width,
-                frame.height,
-                frame.format
-            );
-            // You might want to send this data to the frontend or process it further
-        })
-        .await
-        .map_err(|e| Error::CameraError(format!("Failed to set callback: {}", e)))?;
+        set_callback(device_id.clone(), callback)
+            .await
+            .map_err(|e| Error::CameraError(format!("Failed to set callback: {}", e)))?;
 
         let session_id = uuid::Uuid::new_v4().to_string();
         let active_stream = ActiveStream {
@@ -114,4 +104,23 @@ impl<R: Runtime> Camera<R> {
 
         Ok(())
     }
+}
+
+fn callback(frame: crabcamera::CameraFrame) {
+    let rgb_data = match frame.format.as_str() {
+        "RGB8" => frame.data,
+        "YUV" => yuv_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
+        "NV12" => nv12_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
+        _ => {
+            log::error!("Unsupported frame format: {}", frame.format);
+            return;
+        }
+    };
+    log::info!(
+        "Received frame: {}x{}, size: {} bytes, initial format: {}",
+        frame.width,
+        frame.height,
+        rgb_data.len(),
+        frame.format
+    );
 }

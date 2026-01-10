@@ -1,9 +1,9 @@
 [default]
 description = "Default permissions for the plugin"
 permissions = [
-  "allow-request_camera_permission",
-  "allow-get_available_cameras",
-  "allow-start_streaming",
-  "allow-stop_streaming",
+  "allow-request-camera-permission",
+  "allow-get-available-cameras",
+  "allow-start-streaming",
+  "allow-stop-streaming",
   "allow-initialize"
 ]

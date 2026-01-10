@@ -4,11 +4,11 @@ Default permissions for the plugin
 
 #### This default permission set includes the following:
 
-- `allow_request_camera_permission`
-- `allow_get_available_cameras`
-- `allow_start_streaming`
-- `allow_stop_streaming`
-- `allow_initialize`
+- `allow-request_camera_permission`
+- `allow-get_available_cameras`
+- `allow-start_streaming`
+- `allow-stop_streaming`
+- `allow-initialize`
 
 ## Permission Table
 
@@ -18,6 +18,32 @@ Default permissions for the plugin
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`camera:allow-a-test`
+
+</td>
+<td>
+
+Enables the a_test command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`camera:deny-a-test`
+
+</td>
+<td>
+
+Denies the a_test command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

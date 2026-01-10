@@ -1,3 +1,5 @@
+use crate::error::{Error, Result};
+use crabcamera::permissions::PermissionInfo;
 use crabcamera::CameraDeviceInfo;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
@@ -5,8 +7,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::{ipc::Channel, plugin::PluginApi, AppHandle, Runtime};
 use tokio::sync::Mutex as AsyncMutex;
-
-use crate::error::{Error, Result};
 
 use crabcamera::{
     get_available_cameras, get_recommended_format, request_camera_permission, set_callback,
@@ -37,7 +37,7 @@ pub struct Camera<R: Runtime> {
 
 impl<R: Runtime> Camera<R> {
     /// Request camera permission from the system
-    pub async fn request_permission(&self) -> Result<bool> {
+    pub async fn request_permission(&self) -> Result<PermissionInfo> {
         request_camera_permission()
             .await
             .map_err(|e| Error::CameraError(format!("Failed to request camera permission: {}", e)))

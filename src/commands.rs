@@ -1,8 +1,8 @@
-use tauri::{AppHandle, command, Runtime};
-
 use crate::models::*;
-use crate::Result;
 use crate::CameraExt;
+use crate::Result;
+use crabcamera::permissions::PermissionInfo;
+use tauri::{command, AppHandle, Runtime};
 
 #[command]
 pub(crate) async fn ping<R: Runtime>(
@@ -17,7 +17,7 @@ pub(crate) async fn ping<R: Runtime>(
 #[command]
 pub(crate) async fn request_camera_permission<R: Runtime>(
     app: AppHandle<R>,
-) -> Result<bool> {
+) -> Result<PermissionInfo> {
     app.camera().request_permission().await
 }
 

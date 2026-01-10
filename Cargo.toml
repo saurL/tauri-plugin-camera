@@ -18,7 +18,7 @@ log = "0.4"
 uuid = "1.19.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-crabcamera = { path = "../crabcamera" }
+crabcamera = { git = "https://github.com/saurL/crabcamera.git", branch ="feat/callbackCamera" }
 
 [build-dependencies]
 tauri-plugin = { version = "2.5.2", features = ["build"] }

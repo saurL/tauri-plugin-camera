@@ -101,13 +101,13 @@ const normalizeDevice = (raw: RawCameraDeviceInfo): CameraDeviceInfo => ({
 
 /** Request camera permission from the system. */
 export async function requestCameraPermission(): Promise<PermissionInfo> {
-  const raw = await invoke<RawPermissionInfo>('plugin:camera|request_camera_permission')
+  const raw = await invoke<RawPermissionInfo>('plugin:camera|request-camera-permission')
   return normalizePermission(raw)
 }
 
 /** List all available camera devices (camelCased for frontend use). */
 export async function getAvailableCameras(): Promise<CameraDeviceInfo[]> {
-  const raw = await invoke<RawCameraDeviceInfo[]>('plugin:camera|get_available_cameras')
+  const raw = await invoke<RawCameraDeviceInfo[]>('plugin:camera|get-available-cameras')
   return raw.map(normalizeDevice)
 }
 
@@ -126,7 +126,7 @@ export async function startStreaming(
   const channel = new Channel<FrameEvent>()
   channel.onmessage = onFrame
 
-  return invoke<string>('plugin:camera|start_streaming', {
+  return invoke<string>('plugin:camera|start-streaming', {
     deviceId,
     onFrame: channel,
   })

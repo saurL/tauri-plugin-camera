@@ -41,6 +41,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::request_camera_permission,
             commands::get_available_cameras,
             commands::start_streaming,
+            commands::stop_streaming,
             commands::initialize
         ])
         .setup(|app, api| {

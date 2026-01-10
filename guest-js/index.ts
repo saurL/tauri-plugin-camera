@@ -147,6 +147,16 @@ export async function initialize(): Promise<string> {
   return invoke<string>('plugin:camera|initialize')
 }
 
+/**
+ * Stops an active camera stream.
+ *
+ * @param sessionId - The session ID returned by startStreaming
+ * @returns Promise that resolves when the stream is stopped
+ */
+export async function stopStreaming(sessionId: string): Promise<void> {
+  return invoke<void>('plugin:camera|stop_streaming', { sessionId })
+}
+
 // ============================================================================
 // Utility functions for rendering frames
 // ============================================================================
@@ -276,10 +286,9 @@ export async function createCameraStream(
 
   return {
     sessionId,
-    stop: () => {
+    stop: async () => {
       running = false
-      // Note: You'll need to implement a stop_streaming command in the backend
-      // For now, just stop rendering
+      await stopStreaming(sessionId)
     },
     canvas,
     getFrameInfo: () => {

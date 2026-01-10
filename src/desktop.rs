@@ -98,15 +98,37 @@ impl<R: Runtime> Camera<R> {
         let counter_clone = frame_counter.clone();
         let channel_clone = channel.clone();
 
+        // Semaphore to limit concurrent conversions to 3
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
+        let sem_clone = semaphore.clone();
+
         let callback = move |frame: crabcamera::CameraFrame| {
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+            // Skip 2 out of 3 frames to prevent backlog
+            if frame_id % 3 != 0 {
+                log::debug!("⏭️  Skipping frame #{}", frame_id);
+                return;
+            }
+
             let receive_time = std::time::Instant::now();
 
-            // Clone channel for this frame so callback can be FnMut
+            // Clone for async task
             let frame_channel = channel_clone.clone();
+
+            // Try to acquire semaphore permit (skip if 3 conversions already running)
+            let permit = match sem_clone.clone().try_acquire_owned() {
+                Ok(p) => p,
+                Err(_) => {
+                    log::debug!("⏭️  Frame #{} skipped - conversion slots full (3/3 busy)", frame_id);
+                    return;
+                }
+            };
 
             // Spawn async task to avoid blocking camera thread
             spawn(async move {
+                let _permit = permit;
+                log::debug!("🔓 Frame #{} acquired conversion slot", frame_id);
                 // Log frame info BEFORE conversion
                 log::info!(
                     "📹 Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
@@ -248,5 +270,30 @@ impl<R: Runtime> Camera<R> {
             .insert(session_id.clone(), active_stream);
 
         Ok(session_id)
+    }
+
+    pub async fn stop_stream(&self, session_id: String) -> Result<()> {
+        log::info!("🛑 Stopping stream with session_id: {}", session_id);
+
+        // Remove from active streams
+        let stream = self
+            .active_streams
+            .lock()
+            .await
+            .remove(&session_id)
+            .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?;
+
+        log::info!(
+            "✅ Stream stopped for camera: {} (ran for {:?})",
+            stream.camera_id,
+            stream.start_time.elapsed()
+        );
+
+        // Stop the camera
+        crabcamera::commands::capture::stop_camera(stream.camera_id)
+            .await
+            .map_err(|e| Error::CameraError(format!("Failed to stop camera: {}", e)))?;
+
+        Ok(())
     }
 }

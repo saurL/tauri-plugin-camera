@@ -17,6 +17,8 @@ pub enum Error {
   StreamingAlreadyActive(String),
   #[error("No active stream for device: {0}")]
   NoActiveStream(String),
+  #[error("Stream not found: {0}")]
+  StreamNotFound(String),
   #[error("Failed to initialize camera: {0}")]
   InitializationFailed(String),
   #[error("Channel send error")]

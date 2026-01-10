@@ -31,3 +31,11 @@ pub(crate) async fn start_streaming<R: Runtime>(
 pub(crate) async fn initialize<R: Runtime>(app: AppHandle<R>) -> Result<String> {
     app.camera().initialize().await
 }
+
+#[command]
+pub(crate) async fn stop_streaming<R: Runtime>(
+    app: AppHandle<R>,
+    session_id: String,
+) -> Result<()> {
+    app.camera().stop_stream(session_id).await
+}

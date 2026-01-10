@@ -6,6 +6,6 @@ permissions = [
   "allow-start-streaming",
   "allow-stop-streaming",
   "allow-capture-frame",
-  "allow-get-stream-format"
+  "allow-get-stream-format",
   "allow-initialize"
 ]

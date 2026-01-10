@@ -78,6 +78,13 @@ impl<R: Runtime> Camera<R> {
             }
         }
 
+        let format = get_recommended_format()
+            .await
+            .map_err(|e| Error::CameraError(format!("Failed to get recommended format : {}", e)))?;
+        let camera = start_camera_preview(device_id.clone(), Some(format))
+            .await
+            .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
+
         let clone_id = device_id.clone();
         set_callback(device_id.clone(), move |frame: crabcamera::CameraFrame| {
             // Here you can handle the incoming frame data
@@ -92,13 +99,6 @@ impl<R: Runtime> Camera<R> {
         })
         .await
         .map_err(|e| Error::CameraError(format!("Failed to set callback: {}", e)))?;
-
-        let format = get_recommended_format()
-            .await
-            .map_err(|e| Error::CameraError(format!("Failed to get recommended format : {}", e)))?;
-        let camera = start_camera_preview(device_id.clone(), Some(format))
-            .await
-            .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
 
         let session_id = uuid::Uuid::new_v4().to_string();
         let active_stream = ActiveStream {

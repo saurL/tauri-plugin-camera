@@ -5,9 +5,9 @@
 [[permission]]
 identifier = "allow-start-streaming"
 description = "Enables the start-streaming command without any pre-configured scope."
-commands.allow = ["start-streaming"]
+commands.allow = ["start_streaming"]
 
 [[permission]]
 identifier = "deny-start-streaming"
 description = "Denies the start-streaming command without any pre-configured scope."
-commands.deny = ["start-streaming"]
+commands.deny = ["start_streaming"]

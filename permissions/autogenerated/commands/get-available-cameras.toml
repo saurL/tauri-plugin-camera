@@ -5,9 +5,9 @@
 [[permission]]
 identifier = "allow-get-available-cameras"
 description = "Enables the get-available-cameras command without any pre-configured scope."
-commands.allow = ["get-available-cameras"]
+commands.allow = ["get_available_cameras"]
 
 [[permission]]
 identifier = "deny-get-available-cameras"
 description = "Denies the get-available-cameras command without any pre-configured scope."
-commands.deny = ["get-available-cameras"]
+commands.deny = ["get_available_cameras"]

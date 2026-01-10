@@ -5,9 +5,9 @@
 [[permission]]
 identifier = "allow-request-camera-permission"
 description = "Enables the request-camera-permission command without any pre-configured scope."
-commands.allow = ["request-camera-permission"]
+commands.allow = ["request_camera_permission"]
 
 [[permission]]
 identifier = "deny-request-camera-permission"
 description = "Denies the request-camera-permission command without any pre-configured scope."
-commands.deny = ["request-camera-permission"]
+commands.deny = ["request_camera_permission"]

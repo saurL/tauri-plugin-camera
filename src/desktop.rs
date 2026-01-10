@@ -9,8 +9,8 @@ use tokio::sync::Mutex as AsyncMutex;
 use crate::error::{Error, Result};
 
 use crabcamera::{
-    get_available_cameras, get_recommended_format, set_callback, start_camera_preview,
-    request_camera_permission,
+    get_available_cameras, get_recommended_format, request_camera_permission, set_callback,
+    start_camera_preview,
 };
 
 pub fn init<R: Runtime, C: DeserializeOwned>(
@@ -52,7 +52,7 @@ impl<R: Runtime> Camera<R> {
         Ok(devices)
     }
 
-    async fn start_stream_default_camera(&self) -> Result<()> {
+    pub async fn start_stream_default_camera(&self) -> Result<()> {
         let devices = self.get_available_cameras().await?;
         if let Some(camera) = devices.first() {
             self.start_stream(camera.id.clone()).await?;
@@ -60,7 +60,7 @@ impl<R: Runtime> Camera<R> {
         Ok(())
     }
 
-    async fn start_stream(&self, device_id: String) -> Result<()> {
+    pub async fn start_stream(&self, device_id: String) -> Result<()> {
         // Check if streaming is already active for this device
         {
             let streams = self.active_streams.lock().await;

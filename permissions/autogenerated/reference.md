@@ -5,7 +5,8 @@ Default permissions for the plugin
 #### This default permission set includes the following:
 
 - `allow-ping`
-- `allow-list-devices`
+- `allow-request-camera-permission`
+- `allow-get-available-cameras`
 - `allow-start-streaming`
 - `allow-stop-streaming`
 - `allow-capture-frame`

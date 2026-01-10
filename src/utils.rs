@@ -16,6 +16,9 @@ use crate::error::{Error, Result};
 /// # Returns
 /// RGB24 buffer where each pixel is 3 bytes (R, G, B)
 pub fn yuv_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    let width_usize = width as usize;
+    let height_usize = height as usize;
+
     // Validate input buffer size for I420 format
     // I420 format: Y plane (width*height) + U plane (width*height/4) + V plane (width*height/4)
     let expected_size = width * height * 3 / 2;
@@ -26,12 +29,33 @@ pub fn yuv_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
             yuv_data.len()
         )));
     }
-    let planar_image_mut =
+
+    // Allocate YUV planar image and copy input data into it
+    let mut planar_image_mut =
         YuvPlanarImageMut::<u8>::alloc(width, height, YuvChromaSubsampling::Yuv420);
+
+    // Copy Y plane (first width*height bytes)
+    let y_plane_size = width_usize * height_usize;
+    planar_image_mut.y_plane.copy_from_slice(&yuv_data[0..y_plane_size]);
+
+    // Copy U plane (next width*height/4 bytes)
+    let u_plane_size = width_usize * height_usize / 4;
+    planar_image_mut
+        .u_plane
+        .copy_from_slice(&yuv_data[y_plane_size..y_plane_size + u_plane_size]);
+
+    // Copy V plane (next width*height/4 bytes)
+    let v_plane_offset = y_plane_size + u_plane_size;
+    planar_image_mut
+        .v_plane
+        .copy_from_slice(&yuv_data[v_plane_offset..v_plane_offset + u_plane_size]);
+
     let planar_image = planar_image_mut.to_fixed();
+
     let rgb_data_size = (width * height * 3) as usize;
     let mut rgb_data = vec![0u8; rgb_data_size];
     let rgba_stride = width * 3;
+
     // Convert using yuv crate
     yuv::yuv420_to_rgb(
         &planar_image,
@@ -72,8 +96,19 @@ pub fn nv12_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> 
     // Allocate output RGB buffer (3 bytes per pixel)
     let mut rgb_data = vec![0u8; width_usize * height_usize * 3];
 
-    let planar_image_mut = YuvBiPlanarImageMut::alloc(width, height, YuvChromaSubsampling::Yuv420);
+    // Allocate YUV biplanar image and copy input data into it
+    let mut planar_image_mut = YuvBiPlanarImageMut::alloc(width, height, YuvChromaSubsampling::Yuv420);
+
+    // Copy Y plane (first width*height bytes)
+    let y_plane_size = width_usize * height_usize;
+    planar_image_mut.y_plane.copy_from_slice(&yuv_data[0..y_plane_size]);
+
+    // Copy UV plane (next width*height/2 bytes)
+    let uv_plane_size = width_usize * height_usize / 2;
+    planar_image_mut.uv_plane.copy_from_slice(&yuv_data[y_plane_size..y_plane_size + uv_plane_size]);
+
     let planar_image = planar_image_mut.to_fixed();
+
     // Convert using yuv crate
     let rgba_stride = width * 3;
     yuv::yuv_nv12_to_rgb(

@@ -99,15 +99,83 @@ impl<R: Runtime> Camera<R> {
         let channel_clone = on_frame.clone();
 
         let callback = move |frame: crabcamera::CameraFrame| {
+            // Log frame info BEFORE conversion
+            log::info!(
+                "📹 Received frame #{}: {}x{}, format: {}, data size: {} bytes",
+                counter_clone.load(std::sync::atomic::Ordering::SeqCst),
+                frame.width,
+                frame.height,
+                frame.format,
+                frame.data.len()
+            );
+
+            // Sample first 30 bytes of raw data
+            let sample_size = frame.data.len().min(30);
+            let raw_sample: Vec<String> = frame.data[..sample_size]
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect();
+            log::debug!("Raw data sample (first {} bytes): {}", sample_size, raw_sample.join(" "));
+
             let rgb_data = match frame.format.as_str() {
-                "RGB8" => frame.data,
-                "YUV" => yuv_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
-                "NV12" => nv12_to_rgb(&frame.data, frame.width, frame.height).unwrap_or_default(),
+                "RGB8" => {
+                    log::info!("✅ Format is already RGB8, no conversion needed");
+                    frame.data
+                },
+                "YUV" => {
+                    log::info!("🔄 Converting YUV to RGB8...");
+                    match yuv_to_rgb(&frame.data, frame.width, frame.height) {
+                        Ok(data) => {
+                            log::info!("✅ YUV conversion successful, output size: {} bytes", data.len());
+                            data
+                        },
+                        Err(e) => {
+                            log::error!("❌ YUV conversion failed: {:?}", e);
+                            vec![]
+                        }
+                    }
+                },
+                "NV12" => {
+                    log::info!("🔄 Converting NV12 to RGB8...");
+                    match nv12_to_rgb(&frame.data, frame.width, frame.height) {
+                        Ok(data) => {
+                            log::info!("✅ NV12 conversion successful, output size: {} bytes", data.len());
+                            data
+                        },
+                        Err(e) => {
+                            log::error!("❌ NV12 conversion failed: {:?}", e);
+                            vec![]
+                        }
+                    }
+                },
                 _ => {
-                    log::error!("Unsupported frame format: {}", frame.format);
+                    log::error!("❌ Unsupported frame format: {}", frame.format);
                     return;
                 }
             };
+
+            if rgb_data.is_empty() {
+                log::error!("❌ RGB data is empty after conversion, skipping frame");
+                return;
+            }
+
+            // Sample first 30 bytes of RGB data
+            let rgb_sample_size = rgb_data.len().min(30);
+            let rgb_sample: Vec<String> = rgb_data[..rgb_sample_size]
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect();
+            log::debug!("RGB data sample (first {} bytes): {}", rgb_sample_size, rgb_sample.join(" "));
+
+            // Calculate expected size
+            let expected_size = (frame.width * frame.height * 3) as usize;
+            log::info!(
+                "📊 RGB data size: {} bytes (expected: {} bytes for {}x{} RGB8)",
+                rgb_data.len(),
+                expected_size,
+                frame.width,
+                frame.height
+            );
 
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let timestamp_ms = std::time::SystemTime::now()
@@ -125,7 +193,9 @@ impl<R: Runtime> Camera<R> {
             };
 
             if let Err(e) = channel_clone.send(frame_event) {
-                log::error!("Failed to send frame through channel: {}", e);
+                log::error!("❌ Failed to send frame through channel: {}", e);
+            } else {
+                log::debug!("✅ Frame #{} sent successfully", frame_id);
             }
         };
 

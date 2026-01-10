@@ -11,9 +11,9 @@ use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
+use tauri::async_runtime::spawn;
 use tauri::{ipc::Channel, plugin::PluginApi, AppHandle, Runtime};
 use tokio::sync::Mutex as AsyncMutex;
-
 pub fn init<R: Runtime, C: DeserializeOwned>(
     app: &AppHandle<R>,
     _api: PluginApi<R, C>,
@@ -100,7 +100,7 @@ impl<R: Runtime> Camera<R> {
             let frame_channel = channel_clone.clone();
 
             // Spawn async task to avoid blocking camera thread
-            tokio::spawn(async move {
+            spawn(async move {
                 // Log frame info BEFORE conversion
                 log::info!(
                     "📹 Received frame : {}x{}, format: {}, data size: {} bytes",

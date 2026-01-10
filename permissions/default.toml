@@ -1,0 +1,10 @@
+[default]
+description = "Default permissions for the plugin"
+permissions = [
+  "allow-ping",
+  "allow-list-devices",
+  "allow-start-streaming",
+  "allow-stop-streaming",
+  "allow-capture-frame",
+  "allow-get-stream-format"
+]

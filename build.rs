@@ -1,12 +1,12 @@
 const COMMANDS: &[&str] = &[
     "request-camera-permission",
     "get-available-cameras",
-    "start-streaming",
-    "stop-streaming",
+    "start_streaming",
+    "stop_streaming",
     "capture-frame",
     "get-stream-format",
     "initialize",
-    "get-available-cameras",
+    "get_available_cameras",
 ];
 
 fn main() {

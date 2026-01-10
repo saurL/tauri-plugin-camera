@@ -5,6 +5,7 @@ const COMMANDS: &[&str] = &[
     "stop-streaming",
     "capture-frame",
     "get-stream-format",
+    "initialize",
 ];
 
 fn main() {

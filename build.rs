@@ -1,10 +1,8 @@
 const COMMANDS: &[&str] = &[
-    "request-camera-permission",
-    "get-available-cameras",
+    "request_camera_permission",
+    "get_available_cameras",
     "start_streaming",
     "stop_streaming",
-    "capture-frame",
-    "get-stream-format",
     "initialize",
     "get_available_cameras",
 ];

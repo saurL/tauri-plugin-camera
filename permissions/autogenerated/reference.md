@@ -4,12 +4,12 @@ Default permissions for the plugin
 
 #### This default permission set includes the following:
 
-- `allow-request-camera-permission`
-- `allow-get-available-cameras`
-- `allow-start-streaming`
-- `allow-stop-streaming`
-- `allow-capture-frame`
-- `allow-get-stream-format`
+- `allow-request_camera_permission`
+- `allow-get_available_cameras`
+- `allow-start_streaming`
+- `allow-stop_streaming`
+- `allow-capture_frame`
+- `allow-get_stream_format`
 - `allow-initialize`
 
 ## Permission Table
@@ -24,38 +24,12 @@ Default permissions for the plugin
 <tr>
 <td>
 
-`camera:allow-capture-frame`
-
-</td>
-<td>
-
-Enables the capture-frame command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`camera:deny-capture-frame`
-
-</td>
-<td>
-
-Denies the capture-frame command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
 `camera:allow-get-available-cameras`
 
 </td>
 <td>
 
-Enables the get-available-cameras command without any pre-configured scope.
+Enables the get-available_cameras command without any pre-configured scope.
 
 </td>
 </tr>
@@ -68,33 +42,7 @@ Enables the get-available-cameras command without any pre-configured scope.
 </td>
 <td>
 
-Denies the get-available-cameras command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`camera:allow-get-stream-format`
-
-</td>
-<td>
-
-Enables the get-stream-format command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`camera:deny-get-stream-format`
-
-</td>
-<td>
-
-Denies the get-stream-format command without any pre-configured scope.
+Denies the get-available_cameras command without any pre-configured scope.
 
 </td>
 </tr>
@@ -154,32 +102,6 @@ Denies the initialize command without any pre-configured scope.
 <tr>
 <td>
 
-`camera:allow-ping`
-
-</td>
-<td>
-
-Enables the ping command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`camera:deny-ping`
-
-</td>
-<td>
-
-Denies the ping command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
 `camera:allow-request-camera-permission`
 
 </td>
@@ -199,6 +121,32 @@ Enables the request-camera-permission command without any pre-configured scope.
 <td>
 
 Denies the request-camera-permission command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`camera:allow-request-camera-permission`
+
+</td>
+<td>
+
+Enables the request_camera_permission command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`camera:deny-request-camera-permission`
+
+</td>
+<td>
+
+Denies the request_camera_permission command without any pre-configured scope.
 
 </td>
 </tr>
@@ -251,32 +199,6 @@ Enables the start_streaming command without any pre-configured scope.
 <td>
 
 Denies the start_streaming command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`camera:allow-stop-streaming`
-
-</td>
-<td>
-
-Enables the stop-streaming command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`camera:deny-stop-streaming`
-
-</td>
-<td>
-
-Denies the stop-streaming command without any pre-configured scope.
 
 </td>
 </tr>

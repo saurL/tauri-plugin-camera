@@ -295,40 +295,16 @@
       "type": "string",
       "oneOf": [
         {
-          "description": "Enables the capture-frame command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-capture-frame",
-          "markdownDescription": "Enables the capture-frame command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the capture-frame command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-capture-frame",
-          "markdownDescription": "Denies the capture-frame command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get-available-cameras command without any pre-configured scope.",
+          "description": "Enables the get-available_cameras command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-available-cameras",
-          "markdownDescription": "Enables the get-available-cameras command without any pre-configured scope."
+          "markdownDescription": "Enables the get-available_cameras command without any pre-configured scope."
         },
         {
-          "description": "Denies the get-available-cameras command without any pre-configured scope.",
+          "description": "Denies the get-available_cameras command without any pre-configured scope.",
           "type": "string",
           "const": "deny-get-available-cameras",
-          "markdownDescription": "Denies the get-available-cameras command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the get-stream-format command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-get-stream-format",
-          "markdownDescription": "Enables the get-stream-format command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the get-stream-format command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-get-stream-format",
-          "markdownDescription": "Denies the get-stream-format command without any pre-configured scope."
+          "markdownDescription": "Denies the get-available_cameras command without any pre-configured scope."
         },
         {
           "description": "Enables the get_available_cameras command without any pre-configured scope.",
@@ -355,18 +331,6 @@
           "markdownDescription": "Denies the initialize command without any pre-configured scope."
         },
         {
-          "description": "Enables the ping command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-ping",
-          "markdownDescription": "Enables the ping command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the ping command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-ping",
-          "markdownDescription": "Denies the ping command without any pre-configured scope."
-        },
-        {
           "description": "Enables the request-camera-permission command without any pre-configured scope.",
           "type": "string",
           "const": "allow-request-camera-permission",
@@ -377,6 +341,18 @@
           "type": "string",
           "const": "deny-request-camera-permission",
           "markdownDescription": "Denies the request-camera-permission command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the request_camera_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-request-camera-permission",
+          "markdownDescription": "Enables the request_camera_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the request_camera_permission command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-request-camera-permission",
+          "markdownDescription": "Denies the request_camera_permission command without any pre-configured scope."
         },
         {
           "description": "Enables the start-streaming command without any pre-configured scope.",
@@ -403,18 +379,6 @@
           "markdownDescription": "Denies the start_streaming command without any pre-configured scope."
         },
         {
-          "description": "Enables the stop-streaming command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-stop-streaming",
-          "markdownDescription": "Enables the stop-streaming command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the stop-streaming command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-stop-streaming",
-          "markdownDescription": "Denies the stop-streaming command without any pre-configured scope."
-        },
-        {
           "description": "Enables the stop_streaming command without any pre-configured scope.",
           "type": "string",
           "const": "allow-stop-streaming",
@@ -427,10 +391,10 @@
           "markdownDescription": "Denies the stop_streaming command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-request-camera-permission`\n- `allow-get-available-cameras`\n- `allow-start-streaming`\n- `allow-stop-streaming`\n- `allow-capture-frame`\n- `allow-get-stream-format`\n- `allow-initialize`",
+          "description": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-request_camera_permission`\n- `allow-get_available_cameras`\n- `allow-start_streaming`\n- `allow-stop_streaming`\n- `allow-capture_frame`\n- `allow-get_stream_format`\n- `allow-initialize`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-request-camera-permission`\n- `allow-get-available-cameras`\n- `allow-start-streaming`\n- `allow-stop-streaming`\n- `allow-capture-frame`\n- `allow-get-stream-format`\n- `allow-initialize`"
+          "markdownDescription": "Default permissions for the plugin\n#### This default permission set includes:\n\n- `allow-request_camera_permission`\n- `allow-get_available_cameras`\n- `allow-start_streaming`\n- `allow-stop_streaming`\n- `allow-capture_frame`\n- `allow-get_stream_format`\n- `allow-initialize`"
         }
       ]
     }

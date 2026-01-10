@@ -101,6 +101,32 @@ Denies the get-stream-format command without any pre-configured scope.
 <tr>
 <td>
 
+`camera:allow-initialize`
+
+</td>
+<td>
+
+Enables the initialize command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`camera:deny-initialize`
+
+</td>
+<td>
+
+Denies the initialize command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `camera:allow-ping`
 
 </td>

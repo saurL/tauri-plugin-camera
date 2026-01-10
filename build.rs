@@ -6,6 +6,7 @@ const COMMANDS: &[&str] = &[
     "capture-frame",
     "get-stream-format",
     "initialize",
+    "get-available-cameras",
 ];
 
 fn main() {

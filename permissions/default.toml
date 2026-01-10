@@ -7,4 +7,5 @@ permissions = [
   "allow-stop-streaming",
   "allow-capture-frame",
   "allow-get-stream-format"
+  "allow-initialize"
 ]

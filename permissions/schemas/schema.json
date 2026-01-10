@@ -331,6 +331,18 @@
           "markdownDescription": "Denies the get-stream-format command without any pre-configured scope."
         },
         {
+          "description": "Enables the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-initialize",
+          "markdownDescription": "Enables the initialize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the initialize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-initialize",
+          "markdownDescription": "Denies the initialize command without any pre-configured scope."
+        },
+        {
           "description": "Enables the ping command without any pre-configured scope.",
           "type": "string",
           "const": "allow-ping",

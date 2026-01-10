@@ -3,7 +3,7 @@ use tauri::{
     Manager, Runtime,
 };
 
-pub use crabcamera::permissions::PermissionInfo;
+pub use crabcamera::permissions::PermissionStatus;
 pub use models::*;
 #[cfg(desktop)]
 mod desktop;

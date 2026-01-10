@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-get-available-cameras"
+description = "Enables the get-available-cameras command without any pre-configured scope."
+commands.allow = ["get-available-cameras"]
+
+[[permission]]
+identifier = "deny-get-available-cameras"
+description = "Denies the get-available-cameras command without any pre-configured scope."
+commands.deny = ["get-available-cameras"]

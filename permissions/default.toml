@@ -5,7 +5,5 @@ permissions = [
   "allow-get_available_cameras",
   "allow-start_streaming",
   "allow-stop_streaming",
-  "allow-capture_frame",
-  "allow-get_stream_format",
   "allow-initialize"
 ]

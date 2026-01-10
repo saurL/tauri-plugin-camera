@@ -120,7 +120,10 @@ impl<R: Runtime> Camera<R> {
             let permit = match sem_clone.clone().try_acquire_owned() {
                 Ok(p) => p,
                 Err(_) => {
-                    log::debug!("⏭️  Frame #{} skipped - conversion slots full (3/3 busy)", frame_id);
+                    log::debug!(
+                        "⏭️  Frame #{} skipped - conversion slots full (3/3 busy)",
+                        frame_id
+                    );
                     return;
                 }
             };
@@ -290,7 +293,7 @@ impl<R: Runtime> Camera<R> {
         );
 
         // Stop the camera
-        crabcamera::commands::capture::stop_camera(stream.camera_id)
+        crabcamera::commands::capture::stop_camera_preview(stream.camera_id)
             .await
             .map_err(|e| Error::CameraError(format!("Failed to stop camera: {}", e)))?;
 

@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crabcamera::init::initialize_camera_system;
 use crabcamera::permissions::PermissionInfo;
 use crabcamera::CameraDeviceInfo;
 use serde::de::DeserializeOwned;
@@ -41,6 +42,12 @@ impl<R: Runtime> Camera<R> {
         request_camera_permission()
             .await
             .map_err(|e| Error::CameraError(format!("Failed to request camera permission: {}", e)))
+    }
+
+    pub async fn initialize(&self) -> Result<String> {
+        initialize_camera_system()
+            .await
+            .map_err(|e| Error::CameraError(format!("Failed to initialize camera system: {}", e)))
     }
 
     /// List all available camera devices

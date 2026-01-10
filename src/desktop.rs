@@ -27,7 +27,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 struct ActiveStream {
     camera_id: String,
     start_time: Instant,
-    frame_counter: Arc<std::sync::atomic::AtomicU64>,
+
     channel: Channel<crate::models::FrameEvent>,
 }
 
@@ -75,7 +75,7 @@ impl<R: Runtime> Camera<R> {
     pub async fn start_stream(
         &self,
         device_id: String,
-        on_frame: Channel<crate::models::FrameEvent>,
+        channel: Channel<crate::models::FrameEvent>,
     ) -> Result<String> {
         // Check if streaming is already active for this device
         {
@@ -94,109 +94,123 @@ impl<R: Runtime> Camera<R> {
             .await
             .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
 
-        let frame_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let counter_clone = frame_counter.clone();
-        let channel_clone = on_frame.clone();
-
+        let channel_clone = channel.clone();
         let callback = move |frame: crabcamera::CameraFrame| {
-            // Log frame info BEFORE conversion
-            log::info!(
-                "📹 Received frame #{}: {}x{}, format: {}, data size: {} bytes",
-                counter_clone.load(std::sync::atomic::Ordering::SeqCst),
-                frame.width,
-                frame.height,
-                frame.format,
-                frame.data.len()
-            );
+            // Clone channel for this frame so callback can be FnMut
+            let frame_channel = channel_clone.clone();
 
-            // Sample first 30 bytes of raw data
-            let sample_size = frame.data.len().min(30);
-            let raw_sample: Vec<String> = frame.data[..sample_size]
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect();
-            log::debug!("Raw data sample (first {} bytes): {}", sample_size, raw_sample.join(" "));
+            // Spawn async task to avoid blocking camera thread
+            tokio::spawn(async move {
+                // Log frame info BEFORE conversion
+                log::info!(
+                    "📹 Received frame : {}x{}, format: {}, data size: {} bytes",
+                    frame.width,
+                    frame.height,
+                    frame.format,
+                    frame.data.len()
+                );
 
-            let rgb_data = match frame.format.as_str() {
-                "RGB8" => {
-                    log::info!("✅ Format is already RGB8, no conversion needed");
-                    frame.data
-                },
-                "YUV" => {
-                    log::info!("🔄 Converting YUV to RGB8...");
-                    match yuv_to_rgb(&frame.data, frame.width, frame.height) {
-                        Ok(data) => {
-                            log::info!("✅ YUV conversion successful, output size: {} bytes", data.len());
-                            data
-                        },
-                        Err(e) => {
-                            log::error!("❌ YUV conversion failed: {:?}", e);
-                            vec![]
+                // Sample first 30 bytes of raw data
+                let sample_size = frame.data.len().min(30);
+                let raw_sample: Vec<String> = frame.data[..sample_size]
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect();
+                log::debug!(
+                    "Raw data sample (first {} bytes): {}",
+                    sample_size,
+                    raw_sample.join(" ")
+                );
+
+                let rgb_data = match frame.format.as_str() {
+                    "RGB8" => {
+                        log::info!("✅ Format is already RGB8, no conversion needed");
+                        frame.data
+                    }
+                    "YUV" => {
+                        log::info!("🔄 Converting YUV to RGB8...");
+                        match yuv_to_rgb(&frame.data, frame.width, frame.height) {
+                            Ok(data) => {
+                                log::info!(
+                                    "✅ YUV conversion successful, output size: {} bytes",
+                                    data.len()
+                                );
+                                data
+                            }
+                            Err(e) => {
+                                log::error!("❌ YUV conversion failed: {:?}", e);
+                                vec![]
+                            }
                         }
                     }
-                },
-                "NV12" => {
-                    log::info!("🔄 Converting NV12 to RGB8...");
-                    match nv12_to_rgb(&frame.data, frame.width, frame.height) {
-                        Ok(data) => {
-                            log::info!("✅ NV12 conversion successful, output size: {} bytes", data.len());
-                            data
-                        },
-                        Err(e) => {
-                            log::error!("❌ NV12 conversion failed: {:?}", e);
-                            vec![]
+                    "NV12" => {
+                        log::info!("🔄 Converting NV12 to RGB8...");
+                        match nv12_to_rgb(&frame.data, frame.width, frame.height) {
+                            Ok(data) => {
+                                log::info!(
+                                    "✅ NV12 conversion successful, output size: {} bytes",
+                                    data.len()
+                                );
+                                data
+                            }
+                            Err(e) => {
+                                log::error!("❌ NV12 conversion failed: {:?}", e);
+                                vec![]
+                            }
                         }
                     }
-                },
-                _ => {
-                    log::error!("❌ Unsupported frame format: {}", frame.format);
+                    _ => {
+                        log::error!("❌ Unsupported frame format: {}", frame.format);
+                        return;
+                    }
+                };
+
+                if rgb_data.is_empty() {
+                    log::error!("❌ RGB data is empty after conversion, skipping frame");
                     return;
                 }
-            };
 
-            if rgb_data.is_empty() {
-                log::error!("❌ RGB data is empty after conversion, skipping frame");
-                return;
-            }
+                // Sample first 30 bytes of RGB data
+                let rgb_sample_size = rgb_data.len().min(30);
+                let rgb_sample: Vec<String> = rgb_data[..rgb_sample_size]
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect();
+                log::debug!(
+                    "RGB data sample (first {} bytes): {}",
+                    rgb_sample_size,
+                    rgb_sample.join(" ")
+                );
 
-            // Sample first 30 bytes of RGB data
-            let rgb_sample_size = rgb_data.len().min(30);
-            let rgb_sample: Vec<String> = rgb_data[..rgb_sample_size]
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect();
-            log::debug!("RGB data sample (first {} bytes): {}", rgb_sample_size, rgb_sample.join(" "));
+                // Calculate expected size
+                let expected_size = (frame.width * frame.height * 3) as usize;
+                log::info!(
+                    "📊 RGB data size: {} bytes (expected: {} bytes for {}x{} RGB8)",
+                    rgb_data.len(),
+                    expected_size,
+                    frame.width,
+                    frame.height
+                );
 
-            // Calculate expected size
-            let expected_size = (frame.width * frame.height * 3) as usize;
-            log::info!(
-                "📊 RGB data size: {} bytes (expected: {} bytes for {}x{} RGB8)",
-                rgb_data.len(),
-                expected_size,
-                frame.width,
-                frame.height
-            );
+                let timestamp_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
 
-            let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            let timestamp_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64;
+                let frame_event = crate::models::FrameEvent {
+                    data: rgb_data,
+                    width: frame.width,
+                    height: frame.height,
+                    timestamp_ms,
+                    format: "RGB8".to_string(),
+                };
 
-            let frame_event = crate::models::FrameEvent {
-                frame_id,
-                data: rgb_data,
-                width: frame.width,
-                height: frame.height,
-                timestamp_ms,
-                format: "RGB8".to_string(),
-            };
-
-            if let Err(e) = channel_clone.send(frame_event) {
-                log::error!("❌ Failed to send frame through channel: {}", e);
-            } else {
-                log::debug!("✅ Frame #{} sent successfully", frame_id);
-            }
+                if let Err(e) = frame_channel.send(frame_event) {
+                    log::error!("❌ Failed to send frame through channel: {}", e);
+                } else {
+                    log::debug!("✅ Frame sent successfully");
+                }
+            });
         };
 
         set_callback(device_id.clone(), callback)
@@ -207,8 +221,8 @@ impl<R: Runtime> Camera<R> {
         let active_stream = ActiveStream {
             camera_id: camera,
             start_time: Instant::now(),
-            frame_counter,
-            channel: on_frame,
+
+            channel: channel,
         };
 
         self.active_streams

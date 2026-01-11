@@ -237,6 +237,9 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
     state.error = null
 
     try {
+      // Ensure texture is initialized on first render for each new stream
+      first_render = true
+
       if (state.currentStream) {
         state.currentStream.stop()
         state.currentStream = null
@@ -426,6 +429,8 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
       webglRenderer.cleanup()
       webglRenderer = null
     }
+    // Reset texture init flag for next start
+    first_render = true
     console.log('Streaming stopped')
   }
 

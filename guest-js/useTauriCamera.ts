@@ -388,7 +388,7 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
           console.log(`[useTauriCamera] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, format: ${frame.format}`)
           
           // Schedule async rendering for this frame
-          addFrame(frame)
+          // addFrame(frame)
           
           // Call user callback
           options?.onFrame?.(frame)

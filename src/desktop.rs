@@ -23,6 +23,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
         active_streams: Arc::new(AsyncMutex::new(HashMap::new())),
     })
 }
+use rayon::ThreadPoolBuilder;
 
 struct ActiveStream {
     camera_id: String,
@@ -98,9 +99,18 @@ impl<R: Runtime> Camera<R> {
         let counter_clone = frame_counter.clone();
         let channel_clone = channel.clone();
 
-        // Semaphore to limit concurrent conversions to 3
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
-        let sem_clone = semaphore.clone();
+        // ⚡ Pool de threads pour conversions
+        let pool = ThreadPoolBuilder::new()
+            .num_threads(3)
+            .thread_name(|i| format!("camera-convert-{}", i))
+            .build()
+            .unwrap();
+        let pool = Arc::new(pool);
+        let pool_clone = pool.clone();
+
+        // ⚡ Compteur pour tracker les conversions actives
+        let active_conversions = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let active_clone = active_conversions.clone();
 
         let callback = move |frame: crabcamera::CameraFrame| {
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -111,28 +121,44 @@ impl<R: Runtime> Camera<R> {
                 return;
             }
 
+            // ⚡ Vérifier si le pool est plein AVANT de spawn
+            let current_active = active_clone.load(std::sync::atomic::Ordering::Relaxed);
+            if current_active >= 3 {
+                log::debug!(
+                    "⏭️  Frame #{} skipped - pool full ({}/3 conversions active)",
+                    frame_id,
+                    current_active
+                );
+                return;
+            }
+
+            // ⚡ Incrémenter le compteur AVANT de spawn pour éviter race condition
+            let new_active = active_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+            // Double check au cas où plusieurs threads incrémentent simultanément
+            if new_active >= 3 {
+                active_clone.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                log::debug!("⏭️  Frame #{} skipped - pool became full", frame_id);
+                return;
+            }
+
             let receive_time = std::time::Instant::now();
-
-            // Clone for async task
             let frame_channel = channel_clone.clone();
+            let pool_inner = pool_clone.clone();
+            let active_inner = active_clone.clone();
 
-            // Try to acquire semaphore permit (skip if 3 conversions already running)
-            let permit = match sem_clone.clone().try_acquire_owned() {
-                Ok(p) => p,
-                Err(_) => {
-                    log::debug!(
-                        "⏭️  Frame #{} skipped - conversion slots full (3/3 busy)",
-                        frame_id
-                    );
-                    return;
+            pool_inner.spawn(move || {
+                // ⚡ Décrémenter le compteur à la fin, même en cas d'erreur
+                struct DecOnDrop(Arc<std::sync::atomic::AtomicUsize>);
+                impl Drop for DecOnDrop {
+                    fn drop(&mut self) {
+                        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                    }
                 }
-            };
+                let _guard = DecOnDrop(active_inner);
 
-            // Spawn async task to avoid blocking camera thread
-            spawn(async move {
-                let _permit = permit;
-                log::debug!("🔓 Frame #{} acquired conversion slot", frame_id);
-                // Log frame info BEFORE conversion
+                log::debug!("🔓 Frame #{} processing started", frame_id);
+
                 log::info!(
                     "📹 Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
                     frame_id,
@@ -172,7 +198,7 @@ impl<R: Runtime> Camera<R> {
                             }
                             Err(e) => {
                                 log::error!("❌ YUV conversion failed: {:?}", e);
-                                vec![]
+                                return; // Le guard décrémentera automatiquement
                             }
                         }
                     }
@@ -188,7 +214,7 @@ impl<R: Runtime> Camera<R> {
                             }
                             Err(e) => {
                                 log::error!("❌ NV12 conversion failed: {:?}", e);
-                                vec![]
+                                return;
                             }
                         }
                     }
@@ -197,11 +223,6 @@ impl<R: Runtime> Camera<R> {
                         return;
                     }
                 };
-
-                if rgb_data.is_empty() {
-                    log::error!("❌ RGB data is empty after conversion, skipping frame");
-                    return;
-                }
 
                 // Sample first 30 bytes of RGB data
                 let rgb_sample_size = rgb_data.len().min(30);
@@ -252,6 +273,8 @@ impl<R: Runtime> Camera<R> {
                         processing_duration
                     );
                 }
+
+                // Le guard décrémente automatiquement ici
             });
         };
 

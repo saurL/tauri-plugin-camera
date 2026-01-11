@@ -293,7 +293,7 @@ impl<R: Runtime> Camera<R> {
 
         let session_id = uuid::Uuid::new_v4().to_string();
         let active_stream = ActiveStream {
-            camera_id: camera,
+            camera_id: device_id.clone(), // Use device_id, not camera (which is the status message)
             start_time: Instant::now(),
             _frame_counter: frame_counter,
             _channel: channel,
@@ -329,12 +329,12 @@ impl<R: Runtime> Camera<R> {
 
         log::info!(
             " Stream stopped for camera: {} (ran for {:?})",
-            stream.camera_id,
+            stream.camera_id.clone(),
             stream.start_time.elapsed()
         );
 
         // Stop the camera
-        crabcamera::commands::capture::stop_camera_preview(stream.camera_id.clone())
+        crabcamera::commands::capture::stop_camera_preview(stream.camera_id)
             .await
             .map_err(|e| Error::CameraError(format!("Failed to stop camera: {}", e)))?;
 

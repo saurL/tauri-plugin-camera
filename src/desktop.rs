@@ -122,7 +122,7 @@ impl<R: Runtime> Camera<R> {
             }
 
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if frame_id % 150 == 0 {
+            if frame_id % 150 != 0 {
                 log::info!(
                     " Frame #{} received (every 150 frames log) return",
                     frame_id

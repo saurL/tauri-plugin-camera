@@ -143,7 +143,7 @@ export async function startStreaming(
 
     // Process frame directly without storing in latestFrame
     // Use microtask to process frame asynchronously without blocking the channel
-    Promise.resolve().then(() => {
+    //Promise.resolve().then(() => {
       const processStart = performance.now()
       try {
         onFrame(frame)
@@ -155,7 +155,7 @@ export async function startStreaming(
 
       // Mark as done
       isProcessing = false
-    })
+    //}
   }
 
   return invoke<string>('plugin:camera|start_streaming', {

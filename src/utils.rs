@@ -3,7 +3,7 @@ use yuv::{YuvBiPlanarImage, YuvConversionMode, YuvPlanarImage, YuvRange, YuvStan
 /// Utility functions for image format conversion and processing
 use crate::error::{Error, Result};
 
-/// Convert YUV (I420/YV12) buffer to RGB24
+/// Convert YUV (I420/YV12) buffer to RGBA
 ///
 /// # Arguments
 /// * `yuv_data` - Input YUV buffer (planar format: Y plane, U plane, V plane)
@@ -11,8 +11,8 @@ use crate::error::{Error, Result};
 /// * `height` - Image height in pixels
 ///
 /// # Returns
-/// RGB24 buffer where each pixel is 3 bytes (R, G, B)
-pub fn yuv_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+/// RGBA buffer where each pixel is 4 bytes (R, G, B, A)
+pub fn yuv_to_rgba(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     let width_usize = width as usize;
     let height_usize = height as usize;
 
@@ -43,14 +43,14 @@ pub fn yuv_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
         height,
     };
 
-    // ⚡ OPTIMISATION: Pré-allocation avec capacité exacte
-    let rgb_data_size = width_usize * height_usize * 3;
+    // ⚡ OPTIMISATION: Pré-allocation avec capacité exacte (RGBA = 4 bytes par pixel)
+    let rgb_data_size = width_usize * height_usize * 4;
     let mut rgb_data = Vec::with_capacity(rgb_data_size);
     unsafe {
         rgb_data.set_len(rgb_data_size);
     }
 
-    let rgb_stride = width * 3;
+    let rgb_stride = width * 4;
 
     // ⚡ OPTIMISATION: Détection auto de la matrice couleur selon résolution
     let matrix = if width >= 1280 || height >= 720 {
@@ -60,7 +60,7 @@ pub fn yuv_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     };
 
     // Convert using yuv crate
-    yuv::yuv420_to_rgb(
+    yuv::yuv420_to_rgba(
         &yuv_image,
         &mut rgb_data,
         rgb_stride,
@@ -142,17 +142,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_yuv_to_rgb_buffer_size() {
+    fn test_yuv_to_rgba_buffer_size() {
         let width = 640u32;
         let height = 480u32;
         let yuv_size = (width * height * 3 / 2) as usize;
         let yuv_data = vec![0u8; yuv_size];
 
-        let result = yuv_to_rgb(&yuv_data, width, height);
+        let result = yuv_to_rgba(&yuv_data, width, height);
         assert!(result.is_ok());
 
         let rgb_data = result.unwrap();
-        assert_eq!(rgb_data.len(), (width * height * 3) as usize);
+        assert_eq!(rgb_data.len(), (width * height * 4) as usize); // RGBA = 4 bytes per pixel
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         let height = 480u32;
         let yuv_data = vec![0u8; 100]; // Too small
 
-        let result = yuv_to_rgb(&yuv_data, width, height);
+        let result = yuv_to_rgba(&yuv_data, width, height);
         assert!(result.is_err());
     }
 
@@ -187,6 +187,164 @@ mod tests {
 
         let result = nv12_to_rgba(&nv12_data, width, height);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_nv12_to_rgba_known_values() {
+        // Test avec une image 4x4 pixels pour vérifier la conversion
+        let width = 4u32;
+        let height = 4u32;
+
+        // NV12 format: Y plane (4x4 = 16 bytes) + UV plane (2x2 interleaved = 8 bytes)
+        // Total: 24 bytes for 4x4 image
+
+        // Créons une image avec des valeurs connues:
+        // Y plane: 4x4 = 16 values
+        // UV plane: 2x2 interleaved (UVUV...) = 8 values
+
+        let mut nv12_data = vec![0u8; 24];
+
+        // Y plane: Mettons du blanc pur (Y=235 en limited range)
+        // En NV12, Y=235 correspond à blanc, Y=16 correspond à noir
+        for i in 0..16 {
+            nv12_data[i] = 235; // Blanc
+        }
+
+        // UV plane: Pour du blanc, U=128, V=128 (valeurs neutres)
+        for i in 16..24 {
+            nv12_data[i] = 128;
+        }
+
+        let result = nv12_to_rgba(&nv12_data, width, height);
+        assert!(result.is_ok(), "Conversion should succeed");
+
+        let rgba_data = result.unwrap();
+
+        // Vérifier la taille: 4x4 pixels * 4 bytes (RGBA) = 64 bytes
+        assert_eq!(rgba_data.len(), 64, "RGBA data should be 64 bytes (4x4x4)");
+
+        // Vérifier quelques pixels
+        // Le blanc (Y=235, U=128, V=128) devrait donner des valeurs RGB élevées
+        println!(
+            "\nFirst pixel RGBA: [{}, {}, {}, {}]",
+            rgba_data[0], rgba_data[1], rgba_data[2], rgba_data[3]
+        );
+
+        // Pour du blanc, on s'attend à des valeurs élevées (proche de 255)
+        // Avec limited range YUV, blanc = Y:235 U:128 V:128 -> RGB devrait être proche de (255,255,255)
+        assert!(
+            rgba_data[0] > 200,
+            "R should be high for white (got {})",
+            rgba_data[0]
+        );
+        assert!(
+            rgba_data[1] > 200,
+            "G should be high for white (got {})",
+            rgba_data[1]
+        );
+        assert!(
+            rgba_data[2] > 200,
+            "B should be high for white (got {})",
+            rgba_data[2]
+        );
+        assert_eq!(rgba_data[3], 255, "Alpha should be 255");
+    }
+
+    #[test]
+    fn test_nv12_to_rgba_black() {
+        // Test avec du noir pur
+        let width = 4u32;
+        let height = 4u32;
+
+        let mut nv12_data = vec![0u8; 24];
+
+        // Y plane: noir = 16 en limited range
+        for i in 0..16 {
+            nv12_data[i] = 16;
+        }
+
+        // UV plane: neutre
+        for i in 16..24 {
+            nv12_data[i] = 128;
+        }
+
+        let result = nv12_to_rgba(&nv12_data, width, height);
+        assert!(result.is_ok());
+
+        let rgba_data = result.unwrap();
+        assert_eq!(rgba_data.len(), 64);
+
+        println!(
+            "\nBlack pixel RGBA: [{}, {}, {}, {}]",
+            rgba_data[0], rgba_data[1], rgba_data[2], rgba_data[3]
+        );
+
+        // Pour du noir, RGB devrait être proche de (0,0,0)
+        assert!(
+            rgba_data[0] < 50,
+            "R should be low for black (got {})",
+            rgba_data[0]
+        );
+        assert!(
+            rgba_data[1] < 50,
+            "G should be low for black (got {})",
+            rgba_data[1]
+        );
+        assert!(
+            rgba_data[2] < 50,
+            "B should be low for black (got {})",
+            rgba_data[2]
+        );
+        assert_eq!(rgba_data[3], 255, "Alpha should be 255");
+    }
+
+    #[test]
+    fn test_nv12_to_rgba_red() {
+        // Test avec du rouge pur
+        let width = 4u32;
+        let height = 4u32;
+
+        let mut nv12_data = vec![0u8; 24];
+
+        // Rouge en YUV (limited range): Y≈82, U≈90, V≈240
+        for i in 0..16 {
+            nv12_data[i] = 82; // Y
+        }
+
+        // UV plane interleaved: UVUVUV...
+        for i in 0..4 {
+            // 2x2 chrominance
+            nv12_data[16 + i * 2] = 90; // U
+            nv12_data[16 + i * 2 + 1] = 240; // V
+        }
+
+        let result = nv12_to_rgba(&nv12_data, width, height);
+        assert!(result.is_ok());
+
+        let rgba_data = result.unwrap();
+
+        println!(
+            "\nRed pixel RGBA: [{}, {}, {}, {}]",
+            rgba_data[0], rgba_data[1], rgba_data[2], rgba_data[3]
+        );
+
+        // Rouge devrait avoir R élevé, G et B bas
+        assert!(
+            rgba_data[0] > 200,
+            "R should be high for red (got {})",
+            rgba_data[0]
+        );
+        assert!(
+            rgba_data[1] < 100,
+            "G should be low for red (got {})",
+            rgba_data[1]
+        );
+        assert!(
+            rgba_data[2] < 100,
+            "B should be low for red (got {})",
+            rgba_data[2]
+        );
+        assert_eq!(rgba_data[3], 255, "Alpha should be 255");
     }
 
     // ========================================================================
@@ -305,14 +463,14 @@ mod tests {
 
         println!("\n🔥 Warmup (YUV420)...");
         for _ in 0..5 {
-            let _ = yuv_to_rgb(&yuv_data, width, height).unwrap();
+            let _ = yuv_to_rgba(&yuv_data, width, height).unwrap();
         }
 
         println!("📊 Benchmarking YUV420→RGB conversion...\n");
 
         let start = Instant::now();
         for _ in 0..iterations {
-            let _ = yuv_to_rgb(&yuv_data, width, height).unwrap();
+            let _ = yuv_to_rgba(&yuv_data, width, height).unwrap();
         }
         let elapsed = start.elapsed();
 

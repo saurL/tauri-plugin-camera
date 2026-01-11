@@ -197,15 +197,23 @@ export function renderFrameToCanvas(
   // Create ImageData from the frame
   const imageData = ctx.createImageData(frame.width, frame.height)
 
-  // Convert RGB8 to RGBA (adding alpha channel)
-  const rgbData = frame.data
-  const rgbaData = imageData.data
+  // Check if data is already RGBA or needs conversion from RGB8
+  const isRGBA = frame.format === 'RGBA' || frame.data.length === frame.width * frame.height * 4
 
-  for (let i = 0, j = 0; i < rgbData.length; i += 3, j += 4) {
-    rgbaData[j] = rgbData[i]       // R
-    rgbaData[j + 1] = rgbData[i + 1] // G
-    rgbaData[j + 2] = rgbData[i + 2] // B
-    rgbaData[j + 3] = 255            // A (fully opaque)
+  if (isRGBA) {
+    // Data is already RGBA, copy directly
+    imageData.data.set(frame.data)
+  } else {
+    // Convert RGB8 to RGBA (adding alpha channel)
+    const rgbData = frame.data
+    const rgbaData = imageData.data
+
+    for (let i = 0, j = 0; i < rgbData.length; i += 3, j += 4) {
+      rgbaData[j] = rgbData[i]       // R
+      rgbaData[j + 1] = rgbData[i + 1] // G
+      rgbaData[j + 2] = rgbData[i + 2] // B
+      rgbaData[j + 3] = 255            // A (fully opaque)
+    }
   }
 
   // Apply transformations if needed
@@ -247,7 +255,7 @@ export async function createCameraStream(
     flipHorizontal?: boolean
     flipVertical?: boolean
     /** Callback for each frame (optional) */
-    onFrame?: (frame: FrameEvent) => void
+    onFrame: (frame: FrameEvent) => void
     /** Callback for errors (optional) */
     onError?: (error: Error) => void
   }
@@ -269,13 +277,6 @@ export async function createCameraStream(
     try {
       lastFrameInfo = frame
       frameCount++
-
-      // Render the frame
-      renderFrameToCanvas(canvas, frame, {
-        autoResize: options?.autoResize,
-        flipHorizontal: options?.flipHorizontal,
-        flipVertical: options?.flipVertical,
-      })
 
       // Call user callback if provided
       options?.onFrame?.(frame)

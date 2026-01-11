@@ -260,58 +260,75 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
       // Wrapper for onFrame callback with WebGL
       // NOTE: For optimal WebGL performance, frame.data should be in RGBA format
       // If you need RGB8 to RGBA conversion, uncomment the conversion code below
+
+      console.log('[useTauriCamera] Setting up frame callback, WebGL:', !!webglRenderer)
+
       const frameCallback = webglRenderer
         ? (frame: FrameEvent) => {
-            const gl = webglRenderer!.gl
-            const program = webglRenderer!.program
-            const texture = webglRenderer!.texture
+            console.log(`[WebGL] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, ${frame.data.length} bytes, format: ${frame.format}`)
 
-            // --- Uncomment this block if frame.data is RGB8 instead of RGBA ---
-            // const rgbaData = new Uint8Array(frame.width * frame.height * 4)
-            // for (let i = 0, j = 0; i < frame.data.length; i += 3, j += 4) {
-            //   rgbaData[j] = frame.data[i]       // R
-            //   rgbaData[j + 1] = frame.data[i + 1] // G
-            //   rgbaData[j + 2] = frame.data[i + 2] // B
-            //   rgbaData[j + 3] = 255               // A (opaque)
-            // }
-            // const textureData = rgbaData
-            // --- End of RGB8 to RGBA conversion ---
+            const renderStart = performance.now()
 
-            // Assuming frame.data is already in RGBA format
+            try {
+              const gl = webglRenderer!.gl
+              const program = webglRenderer!.program
+              const texture = webglRenderer!.texture
 
-            // Update texture directly with data
-            gl.bindTexture(gl.TEXTURE_2D, texture)
-            gl.texImage2D(
-              gl.TEXTURE_2D,
-              0,
-              gl.RGBA,
-              frame.width,
-              frame.height,
-              0,
-              gl.RGBA,
-              gl.UNSIGNED_BYTE,
-              frame.data
-            )
+              // Check data size
+              const expectedSize = frame.width * frame.height * 4
+              if (frame.data.length !== expectedSize) {
+                console.error(`[WebGL] Data size mismatch! Expected ${expectedSize}, got ${frame.data.length}`)
+                return
+              }
 
-            // Set horizontal flip
-            const flipLocation = gl.getUniformLocation(program, 'u_flipHorizontal')
-            gl.uniform1i(flipLocation, options?.flipHorizontal ? 1 : 0)
+              // Update texture directly with data (assuming RGBA)
+              console.log('[WebGL] Binding texture and uploading data...')
+              gl.bindTexture(gl.TEXTURE_2D, texture)
+              gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA,
+                frame.width,
+                frame.height,
+                0,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                frame.data
+              )
 
-            // Draw
-            gl.viewport(0, 0, canvas.width, canvas.height)
-            gl.clearColor(0, 0, 0, 1)
-            gl.clear(gl.COLOR_BUFFER_BIT)
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+              // Set horizontal flip
+              const flipLocation = gl.getUniformLocation(program, 'u_flipHorizontal')
+              gl.uniform1i(flipLocation, options?.flipHorizontal ? 1 : 0)
 
-            // Call user callback
+              // Draw
+              console.log('[WebGL] Drawing...')
+              gl.viewport(0, 0, canvas.width, canvas.height)
+              gl.clearColor(0, 0, 0, 1)
+              gl.clear(gl.COLOR_BUFFER_BIT)
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+              const renderTime = performance.now() - renderStart
+              console.log(`[WebGL] Frame #${frame.frameId} rendered in ${renderTime.toFixed(2)}ms`)
+
+              // Call user callback
+              options?.onFrame?.(frame)
+            } catch (error) {
+              console.error('[WebGL] Render error:', error)
+            }
+          }
+        : (frame: FrameEvent) => {
+            console.log(`[Canvas2D] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, format: ${frame.format}`)
             options?.onFrame?.(frame)
           }
-        : options?.onFrame
 
+      console.log('[useTauriCamera] Creating camera stream...')
       state.currentStream = await createCameraStream(canvas, deviceId, {
         flipHorizontal: options?.flipHorizontal ?? true,
         onFrame: frameCallback,
-        onError: options?.onError,
+        onError: (error) => {
+          console.error('[useTauriCamera] Stream error:', error)
+          options?.onError?.(error)
+        },
       })
 
       console.log('Streaming started successfully')

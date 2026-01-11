@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::utils::{nv12_to_rgba, yuv_to_rgb};
+use crate::utils::{nv12_to_rgba, yuv_to_rgba};
 use crabcamera::init::initialize_camera_system;
 use crabcamera::permissions::PermissionInfo;
 use crabcamera::CameraDeviceInfo;
@@ -169,20 +169,21 @@ impl<R: Runtime> Camera<R> {
                     time_to_start
                 );
 
-                let rgb_data = match frame.format.as_str() {
+                // Track the output format
+                let (rgb_data, output_format) = match frame.format.as_str() {
                     "NV12" => {
-                        log::info!(" Converting NV12 to RGB8...");
+                        log::info!(" Converting NV12 to RGBA...");
                         let conversion_start = std::time::Instant::now();
 
                         match nv12_to_rgba(&frame.data, frame.width, frame.height) {
                             Ok(data) => {
                                 let conversion_time = conversion_start.elapsed();
                                 log::info!(
-                                    " NV12 conversion took {:?}, output size: {} bytes",
+                                    " NV12 conversion took {:?}, output size: {} bytes (RGBA)",
                                     conversion_time,
                                     data.len()
                                 );
-                                data
+                                (data, "RGBA")
                             }
                             Err(e) => {
                                 log::error!("ERROR NV12 conversion failed: {:?}", e);
@@ -192,21 +193,21 @@ impl<R: Runtime> Camera<R> {
                     }
                     "RGB8" => {
                         log::info!(" Format is already RGB8, no conversion needed");
-                        frame.data
+                        (frame.data, "RGB8")
                     }
                     "YUV" => {
-                        log::info!(" Converting YUV to RGB8...");
+                        log::info!(" Converting YUV to RGBA...");
                         let conversion_start = std::time::Instant::now();
 
-                        match yuv_to_rgb(&frame.data, frame.width, frame.height) {
+                        match yuv_to_rgba(&frame.data, frame.width, frame.height) {
                             Ok(data) => {
                                 let conversion_time = conversion_start.elapsed();
                                 log::info!(
-                                    " YUV conversion took {:?}, output size: {} bytes",
+                                    " YUV conversion took {:?}, output size: {} bytes (RGBA)",
                                     conversion_time,
                                     data.len()
                                 );
-                                data
+                                (data, "RGBA")
                             }
                             Err(e) => {
                                 log::error!("ERROR YUV conversion failed: {:?}", e);
@@ -234,7 +235,7 @@ impl<R: Runtime> Camera<R> {
                     width: frame.width,
                     height: frame.height,
                     timestamp_ms,
-                    format: "RGB8".to_string(),
+                    format: output_format.to_string(),
                 };
 
                 let frame_event_time = before_frame_event.elapsed();
@@ -277,7 +278,7 @@ impl<R: Runtime> Camera<R> {
             camera_id: camera,
             start_time: Instant::now(),
             _frame_counter: frame_counter,
-            _channel: channel,
+            _channel: channely,
         };
 
         self.active_streams

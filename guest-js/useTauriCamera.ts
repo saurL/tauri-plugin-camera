@@ -261,7 +261,7 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
       }
 
       console.log('[useTauriCamera] Creating camera stream...')
-      
+
       // Setup frame rendering logic
       let pendingRender = false
       let lastRenderedFrameId = -1

@@ -114,6 +114,8 @@ export async function getAvailableCameras(): Promise<CameraDeviceInfo[]> {
 /**
  * Start streaming from a camera device.
  * The backend sends frames through the provided channel callback.
+ * Uses a drop-old strategy to prevent memory leaks: only the latest frame is kept.
+ *
  * @param deviceId - The ID of the camera device to stream from
  * @param onFrame - Callback function that receives each frame
  * @returns Promise resolving to the session ID
@@ -124,16 +126,41 @@ export async function startStreaming(
 ): Promise<string> {
   // Use a Tauri Channel for ordered, low-latency frame delivery.
   const channel = new Channel<FrameEvent>()
+
+  // Frame buffer: only keep the latest frame to prevent memory leaks
+  let latestFrame: FrameEvent | null = null
+  let isProcessing = false
+
   channel.onmessage = (frame) => {
-    const receiveTime = performance.now()
-    console.log(`[TS] 📥 Frame #${frame.frameId} received at ${receiveTime.toFixed(2)}ms`)
-    console.log(`[TS] Frame data: ${frame.width}x${frame.height}, ${frame.data.length} bytes, format: ${frame.format}`)
+    console.log(`[Channel] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, ${frame.data.length} bytes, format: ${frame.format}`)
 
-    const processStart = performance.now()
-    onFrame(frame)
-    const processDuration = performance.now() - processStart
+    // Drop old frame and replace with new one (prevents memory buildup)
+    if (latestFrame) {
+      console.log(`[Channel] Dropping old frame #${latestFrame.frameId}, replacing with #${frame.frameId}`)
+    }
+    latestFrame = frame
 
-    console.log(`[TS] ✅ Frame #${frame.frameId} processed in ${processDuration.toFixed(2)}ms`)
+    // Schedule processing if not already processing
+    if (!isProcessing) {
+      isProcessing = true
+      // Use microtask to process frame asynchronously without blocking the channel
+      Promise.resolve().then(() => {
+        const frameToProcess = latestFrame
+        latestFrame = null // Clear reference immediately
+        isProcessing = false
+
+        if (frameToProcess) {
+          const processStart = performance.now()
+          try {
+            onFrame(frameToProcess)
+          } catch (error) {
+            console.error(`[Channel] Error processing frame #${frameToProcess.frameId}:`, error)
+          }
+          const processDuration = performance.now() - processStart
+          console.log(`[Channel] Frame #${frameToProcess.frameId} processed in ${processDuration.toFixed(2)}ms`)
+        }
+      })
+    }
   }
 
   return invoke<string>('plugin:camera|start_streaming', {

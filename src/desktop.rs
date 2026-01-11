@@ -29,6 +29,8 @@ struct ActiveStream {
     start_time: Instant,
     _frame_counter: Arc<std::sync::atomic::AtomicU64>,
     _channel: Channel<crate::models::FrameEvent>,
+    _pool: Arc<rayon::ThreadPool>,
+    running: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Access to the camera APIs.
@@ -101,6 +103,10 @@ impl<R: Runtime> Camera<R> {
         let active_clone = active.clone();
         let channel_clone = channel.clone();
 
+        // Flag to signal when stream should stop processing
+        let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let running_clone = running.clone();
+
         let pool = ThreadPoolBuilder::new()
             .num_threads(3) // 3 threads pour les conversions
             .thread_name(|i| format!("camera-convert-{}", i))
@@ -109,6 +115,12 @@ impl<R: Runtime> Camera<R> {
         let pool = Arc::new(pool);
         let pool_clone = pool.clone();
         let callback = move |frame: crabcamera::CameraFrame| {
+            // Check if stream is still running (prevents memory leak after stop)
+            if !running_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                log::debug!("STOP  Stream stopped, dropping frame");
+                return;
+            }
+
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
             // ⚡ Vérifier si le pool est plein AVANT de spawn
@@ -279,6 +291,8 @@ impl<R: Runtime> Camera<R> {
             start_time: Instant::now(),
             _frame_counter: frame_counter,
             _channel: channel,
+            _pool: pool,
+            running,
         };
 
         self.active_streams
@@ -292,13 +306,17 @@ impl<R: Runtime> Camera<R> {
     pub async fn stop_stream(&self, session_id: String) -> Result<()> {
         log::info!(" Stopping stream with session_id: {}", session_id);
 
-        // Remove from active streams
-        let stream = self
-            .active_streams
-            .lock()
-            .await
-            .remove(&session_id)
-            .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?;
+        // First, signal the callback to stop processing frames
+        let stream = {
+            let mut streams = self.active_streams.lock().await;
+            if let Some(stream) = streams.get(&session_id) {
+                // Mark stream as stopped to prevent new frames from being processed
+                stream.running.store(false, std::sync::atomic::Ordering::Release);
+                log::info!(" Marked stream {} as stopped", session_id);
+            }
+            streams.remove(&session_id)
+                .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?
+        };
 
         log::info!(
             " Stream stopped for camera: {} (ran for {:?})",
@@ -310,9 +328,15 @@ impl<R: Runtime> Camera<R> {
         crabcamera::commands::capture::stop_camera_preview(stream.camera_id.clone())
             .await
             .map_err(|e| Error::CameraError(format!("Failed to stop camera: {}", e)))?;
+
+        // Clear the callback
         set_callback(stream.camera_id, |_| {})
             .await
             .map_err(|e| Error::CameraError(format!("Failed to clear callback: {}", e)))?;
+
+        // When stream is dropped here, the threadpool will be dropped too
+        log::info!(" Stream resources cleaned up");
+
         Ok(())
     }
 }

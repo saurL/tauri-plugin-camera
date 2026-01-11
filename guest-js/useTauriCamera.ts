@@ -43,7 +43,7 @@ export const useTauriCamera = () => {
     isStreaming: false,
     currentStream: null
   }
-
+  let first_render = true
   let webglRenderer: WebGLRenderer | null = null
 
   // Initialiser le système de caméra
@@ -282,6 +282,7 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
           return
         }
 
+
         // Skip if this frame was already rendered
         if (frame.frameId === lastRenderedFrameId) {
           return
@@ -320,6 +321,7 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
                 } else {
                   // Update texture with frame data
                   gl.bindTexture(gl.TEXTURE_2D, texture)
+                  if(first_render){
                   gl.texImage2D(
                     gl.TEXTURE_2D,
                     0,
@@ -331,6 +333,22 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
                     gl.UNSIGNED_BYTE,
                     frameToRender.data
                   )
+                  first_render = false
+                }
+                else{
+                  gl.texSubImage2D(
+                    gl.TEXTURE_2D,
+                    0,
+                    0,
+                    0,
+                    frameToRender.width,
+                                      frameToRender.height,
+                    gl.RGBA,
+                    gl.UNSIGNED_BYTE,
+                    frameToRender.data
+                    )
+                  }                 
+
 
                   // Set horizontal flip
                   const flipLocation = gl.getUniformLocation(program, 'u_flipHorizontal')

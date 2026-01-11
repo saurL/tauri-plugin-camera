@@ -1,5 +1,8 @@
 import { invoke, Channel } from '@tauri-apps/api/core'
 
+// Re-export useTauriCamera composable
+export { useTauriCamera } from './useTauriCamera'
+
 // Backend types -------------------------------------------------------------
 export type Platform = 'Windows' | 'MacOS' | 'Linux' | 'Unknown'
 

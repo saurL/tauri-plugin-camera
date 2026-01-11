@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::utils::{nv12_to_rgb, yuv_to_rgb};
+use crate::utils::{nv12_to_rgba, yuv_to_rgb};
 use crabcamera::init::initialize_camera_system;
 use crabcamera::permissions::PermissionInfo;
 use crabcamera::CameraDeviceInfo;
@@ -11,7 +11,6 @@ use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tauri::async_runtime::spawn;
 use tauri::{ipc::Channel, plugin::PluginApi, AppHandle, Runtime};
 use tokio::sync::Mutex as AsyncMutex;
 pub fn init<R: Runtime, C: DeserializeOwned>(
@@ -19,7 +18,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
     _api: PluginApi<R, C>,
 ) -> Result<Camera<R>> {
     Ok(Camera {
-        app: app.clone(),
+        _app: app.clone(),
         active_streams: Arc::new(AsyncMutex::new(HashMap::new())),
     })
 }
@@ -28,13 +27,13 @@ use rayon::ThreadPoolBuilder;
 struct ActiveStream {
     camera_id: String,
     start_time: Instant,
-    frame_counter: Arc<std::sync::atomic::AtomicU64>,
-    channel: Channel<crate::models::FrameEvent>,
+    _frame_counter: Arc<std::sync::atomic::AtomicU64>,
+    _channel: Channel<crate::models::FrameEvent>,
 }
 
 /// Access to the camera APIs.
 pub struct Camera<R: Runtime> {
-    app: AppHandle<R>,
+    _app: AppHandle<R>,
     active_streams: Arc<AsyncMutex<HashMap<String, ActiveStream>>>,
 }
 
@@ -116,7 +115,7 @@ impl<R: Runtime> Camera<R> {
             let current_active = active_clone.load(std::sync::atomic::Ordering::Relaxed);
             if current_active >= 3 {
                 log::debug!(
-                    "⏭️  Frame #{} skipped - pool full ({}/3 conversions active)",
+                    "SKIP  Frame #{} skipped - pool full ({}/3 conversions active)",
                     frame_id,
                     current_active
                 );
@@ -129,13 +128,13 @@ impl<R: Runtime> Camera<R> {
             // Double check
             if new_active >= 3 {
                 active_clone.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-                log::debug!("⏭️  Frame #{} skipped - pool became full", frame_id);
+                log::debug!("SKIP  Frame #{} skipped - pool became full", frame_id);
                 return;
             }
 
             let receive_time = std::time::Instant::now();
 
-            // ✅ Clone TOUS les Arc nécessaires pour le spawn
+            //  Clone TOUS les Arc nécessaires pour le spawn
             let frame_channel = channel_clone.clone();
             let pool_inner = pool_clone.clone();
             let active_inner = active_clone.clone(); // ← MANQUANT dans votre code !
@@ -151,10 +150,8 @@ impl<R: Runtime> Camera<R> {
                 }
                 let _guard = DecOnDrop(active_inner);
 
-                let start_processing = std::time::Instant::now();
-
                 log::info!(
-                    "📹 Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
+                    " Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
                     frame_id,
                     receive_time,
                     frame.width,
@@ -165,7 +162,7 @@ impl<R: Runtime> Camera<R> {
 
                 // ⏱️ MESURE 1: Avant conversion
                 let before_conversion = std::time::Instant::now();
-                let time_to_start = before_conversion.duration_since(start_processing);
+                let time_to_start = before_conversion.duration_since(receive_time.clone());
                 log::info!(
                     "⏱️  Frame #{} - Time to start conversion: {:?}",
                     frame_id,
@@ -174,51 +171,51 @@ impl<R: Runtime> Camera<R> {
 
                 let rgb_data = match frame.format.as_str() {
                     "NV12" => {
-                        log::info!("🔄 Converting NV12 to RGB8...");
+                        log::info!(" Converting NV12 to RGB8...");
                         let conversion_start = std::time::Instant::now();
 
-                        match nv12_to_rgb(&frame.data, frame.width, frame.height) {
+                        match nv12_to_rgba(&frame.data, frame.width, frame.height) {
                             Ok(data) => {
                                 let conversion_time = conversion_start.elapsed();
                                 log::info!(
-                                    "✅ NV12 conversion took {:?}, output size: {} bytes",
+                                    " NV12 conversion took {:?}, output size: {} bytes",
                                     conversion_time,
                                     data.len()
                                 );
                                 data
                             }
                             Err(e) => {
-                                log::error!("❌ NV12 conversion failed: {:?}", e);
+                                log::error!("ERROR NV12 conversion failed: {:?}", e);
                                 return; // Le guard décrémente automatiquement
                             }
                         }
                     }
                     "RGB8" => {
-                        log::info!("✅ Format is already RGB8, no conversion needed");
+                        log::info!(" Format is already RGB8, no conversion needed");
                         frame.data
                     }
                     "YUV" => {
-                        log::info!("🔄 Converting YUV to RGB8...");
+                        log::info!(" Converting YUV to RGB8...");
                         let conversion_start = std::time::Instant::now();
 
                         match yuv_to_rgb(&frame.data, frame.width, frame.height) {
                             Ok(data) => {
                                 let conversion_time = conversion_start.elapsed();
                                 log::info!(
-                                    "✅ YUV conversion took {:?}, output size: {} bytes",
+                                    " YUV conversion took {:?}, output size: {} bytes",
                                     conversion_time,
                                     data.len()
                                 );
                                 data
                             }
                             Err(e) => {
-                                log::error!("❌ YUV conversion failed: {:?}", e);
+                                log::error!("ERROR YUV conversion failed: {:?}", e);
                                 return;
                             }
                         }
                     }
                     _ => {
-                        log::error!("❌ Unsupported frame format: {}", frame.format);
+                        log::error!("ERROR Unsupported frame format: {}", frame.format);
                         return;
                     }
                 };
@@ -251,10 +248,10 @@ impl<R: Runtime> Camera<R> {
                 let before_send = std::time::Instant::now();
 
                 if let Err(e) = frame_channel.send(frame_event) {
-                    log::error!("❌ Frame #{} failed to send: {}", frame_id, e);
+                    log::error!("ERROR Frame #{} failed to send: {}", frame_id, e);
                 } else {
                     let send_time = before_send.elapsed();
-                    let total_time = start_processing.elapsed();
+                    let total_time = receive_time.elapsed();
 
                     log::info!(
                         "⏱️  Frame #{} - Channel send took {:?}",
@@ -262,7 +259,7 @@ impl<R: Runtime> Camera<R> {
                         send_time
                     );
                     log::info!(
-                        "✅ Frame #{} TOTAL processing time: {:?}",
+                        " Frame #{} TOTAL processing time: {:?}",
                         frame_id,
                         total_time
                     );
@@ -279,8 +276,8 @@ impl<R: Runtime> Camera<R> {
         let active_stream = ActiveStream {
             camera_id: camera,
             start_time: Instant::now(),
-            frame_counter,
-            channel,
+            _frame_counter: frame_counter,
+            _channel: channel,
         };
 
         self.active_streams
@@ -292,7 +289,7 @@ impl<R: Runtime> Camera<R> {
     }
 
     pub async fn stop_stream(&self, session_id: String) -> Result<()> {
-        log::info!("🛑 Stopping stream with session_id: {}", session_id);
+        log::info!(" Stopping stream with session_id: {}", session_id);
 
         // Remove from active streams
         let stream = self
@@ -303,7 +300,7 @@ impl<R: Runtime> Camera<R> {
             .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?;
 
         log::info!(
-            "✅ Stream stopped for camera: {} (ran for {:?})",
+            " Stream stopped for camera: {} (ran for {:?})",
             stream.camera_id,
             stream.start_time.elapsed()
         );

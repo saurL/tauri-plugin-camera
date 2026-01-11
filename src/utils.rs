@@ -81,7 +81,7 @@ pub fn yuv_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
 ///
 /// # Returns
 /// RGB24 buffer where each pixel is 3 bytes (R, G, B)
-pub fn nv12_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+pub fn nv12_to_rgba(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     let width_usize = width as usize;
     let height_usize = height as usize;
 
@@ -124,7 +124,7 @@ pub fn nv12_to_rgb(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> 
     };
 
     // Convert using yuv crate
-    yuv::yuv_nv12_to_rgb(
+    yuv::yuv_nv12_to_rgba(
         &yuv_image,
         &mut rgb_data,
         rgb_stride,
@@ -166,13 +166,13 @@ mod tests {
     }
 
     #[test]
-    fn test_nv12_to_rgb_buffer_size() {
+    fn test_nv12_to_rgba_buffer_size() {
         let width = 640u32;
         let height = 480u32;
         let nv12_size = (width * height * 3 / 2) as usize;
         let nv12_data = vec![0u8; nv12_size];
 
-        let result = nv12_to_rgb(&nv12_data, width, height);
+        let result = nv12_to_rgba(&nv12_data, width, height);
         assert!(result.is_ok());
 
         let rgb_data = result.unwrap();
@@ -180,12 +180,12 @@ mod tests {
     }
 
     #[test]
-    fn test_nv12_to_rgb_invalid_size() {
+    fn test_nv12_to_rgba_invalid_size() {
         let width = 640u32;
         let height = 480u32;
         let nv12_data = vec![0u8; 100]; // Too small
 
-        let result = nv12_to_rgb(&nv12_data, width, height);
+        let result = nv12_to_rgba(&nv12_data, width, height);
         assert!(result.is_err());
     }
 
@@ -194,7 +194,7 @@ mod tests {
     // ========================================================================
 
     #[test]
-    fn bench_nv12_to_rgb_hd() {
+    fn bench_nv12_to_rgba_hd() {
         use std::time::Instant;
 
         let width = 1920u32;
@@ -214,7 +214,7 @@ mod tests {
         // Warmup
         println!("\n🔥 Warmup ({} iterations)...", warmup);
         for _ in 0..warmup {
-            let _ = nv12_to_rgb(&nv12_data, width, height).unwrap();
+            let _ = nv12_to_rgba(&nv12_data, width, height).unwrap();
         }
 
         // Benchmark réel
@@ -226,7 +226,7 @@ mod tests {
 
         let start = Instant::now();
         for _ in 0..iterations {
-            let _ = nv12_to_rgb(&nv12_data, width, height).unwrap();
+            let _ = nv12_to_rgba(&nv12_data, width, height).unwrap();
         }
         let elapsed = start.elapsed();
 
@@ -268,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn bench_nv12_to_rgb_720p() {
+    fn bench_nv12_to_rgba_720p() {
         use std::time::Instant;
 
         let width = 1280u32;
@@ -280,7 +280,7 @@ mod tests {
         let start = Instant::now();
 
         for _ in 0..iterations {
-            let _ = nv12_to_rgb(&nv12_data, width, height).unwrap();
+            let _ = nv12_to_rgba(&nv12_data, width, height).unwrap();
         }
 
         let elapsed = start.elapsed();

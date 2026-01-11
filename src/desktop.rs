@@ -333,18 +333,30 @@ impl<R: Runtime> Camera<R> {
             stream.start_time.elapsed()
         );
 
-        // Stop the camera
+        // First, clear the callback to stop receiving frames
+        log::info!(" Clearing callback for camera: {}", stream.camera_id);
+        set_callback(stream.camera_id.clone(), |_| {})
+            .await
+            .map_err(|e| Error::CameraError(format!("Failed to clear callback: {}", e)))?;
+
+        // Then stop the camera preview
+        log::info!(" Stopping camera preview for device: {}", stream.camera_id);
         crabcamera::commands::capture::stop_camera_preview(stream.camera_id.clone())
             .await
             .map_err(|e| Error::CameraError(format!("Failed to stop camera: {}", e)))?;
 
-        // Clear the callback
-        set_callback(stream.camera_id, |_| {})
+        // WORKAROUND: Give more time for camera to fully release
+        // TODO: This should be fixed in crabcamera by properly closing/dropping the camera
+        log::warn!(" Waiting 500ms for camera to fully release (crabcamera limitation)");
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        crabcamera::commands::capture::release_camera(stream.camera_id.clone())
             .await
-            .map_err(|e| Error::CameraError(format!("Failed to clear callback: {}", e)))?;
-
+            .map_err(|e| Error::CameraError(format!("Failed to release camera: {}", e)))?;
         // When stream is dropped here, the threadpool will be dropped too
-        log::info!(" Stream resources cleaned up");
+        log::info!(
+            " Stream resources cleaned up for camera: {}",
+            stream.camera_id
+        );
 
         Ok(())
     }

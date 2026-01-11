@@ -1,0 +1,9 @@
+[build]
+rustflags = [
+    "-C", "target-cpu=native",  # Active toutes les instructions SIMD disponibles
+]
+
+[profile.release]
+opt-level = 3
+lto = true           # Link-Time Optimization
+codegen-units = 1    # Meilleure optimisation

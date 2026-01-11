@@ -232,41 +232,45 @@ export function renderFrameToCanvas(
 }
 
 /**
- * Creates a video element-like streaming component that automatically renders frames.
+ * Creates a video element-like streaming component with a frame buffer.
+ * The callback only updates the buffer; rendering should be handled separately.
  * Returns a controller object to manage the stream.
  *
- * @param canvas - The canvas element to render to
  * @param deviceId - The camera device ID to stream from
- * @param options - Optional rendering options
+ * @param options - Optional streaming options
  * @returns A promise that resolves to a stream controller
  *
  * @example
- * const canvas = document.getElementById('camera-preview') as HTMLCanvasElement
- * const stream = await createCameraStream(canvas, '0')
+ * const stream = await createCameraStream('0', {
+ *   onFrame: (frame) => console.log('Frame received')
+ * })
+ *
+ * // Get the latest frame to render
+ * const frame = stream.getLatestFrame()
+ * if (frame) {
+ *   renderFrameToCanvas(canvas, frame)
+ * }
  *
  * // Later, to stop:
  * stream.stop()
  */
 export async function createCameraStream(
-  canvas: HTMLCanvasElement,
   deviceId: string,
   options?: {
-    autoResize?: boolean
-    flipHorizontal?: boolean
-    flipVertical?: boolean
     /** Callback for each frame (optional) */
-    onFrame: (frame: FrameEvent) => void
+    onFrame?: (frame: FrameEvent) => void
     /** Callback for errors (optional) */
     onError?: (error: Error) => void
   }
 ): Promise<{
   sessionId: string
-  stop: () => void
-  canvas: HTMLCanvasElement
+  stop: () => Promise<void>
+  /** Get the latest frame from the buffer */
+  getLatestFrame: () => FrameEvent | null
   /** Get the latest frame info */
   getFrameInfo: () => { frameId: number; fps: number; width: number; height: number } | null
 }> {
-  let lastFrameInfo: FrameEvent | null = null
+  let latestFrame: FrameEvent | null = null
   let frameCount = 0
   let startTime = Date.now()
   let running = true
@@ -275,7 +279,8 @@ export async function createCameraStream(
     if (!running) return
 
     try {
-      lastFrameInfo = frame
+      // Update the buffer with the latest frame
+      latestFrame = frame
       frameCount++
 
       // Call user callback if provided
@@ -290,17 +295,18 @@ export async function createCameraStream(
     stop: async () => {
       running = false
       await stopStreaming(sessionId)
+      latestFrame = null
     },
-    canvas,
+    getLatestFrame: () => latestFrame,
     getFrameInfo: () => {
-      if (!lastFrameInfo) return null
+      if (!latestFrame) return null
       const elapsed = (Date.now() - startTime) / 1000
       const fps = frameCount / elapsed
       return {
-        frameId: lastFrameInfo.frameId,
+        frameId: latestFrame.frameId,
         fps: Math.round(fps * 10) / 10,
-        width: lastFrameInfo.width,
-        height: lastFrameInfo.height,
+        width: latestFrame.width,
+        height: latestFrame.height,
       }
     },
   }

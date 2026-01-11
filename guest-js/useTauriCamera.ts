@@ -10,8 +10,8 @@ export type { CameraDeviceInfo, FrameEvent }
 
 interface CameraStreamController {
   sessionId: string
-  stop: () => void
-  canvas: HTMLCanvasElement
+  stop: () => Promise<void>
+  getLatestFrame: () => FrameEvent | null
   getFrameInfo: () => {
     frameId: number
     fps: number
@@ -257,79 +257,113 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
         }
       }
 
-      // Wrapper for onFrame callback with WebGL
-      // NOTE: For optimal WebGL performance, frame.data should be in RGBA format
-      // If you need RGB8 to RGBA conversion, uncomment the conversion code below
+      console.log('[useTauriCamera] Creating camera stream...')
+      
+      // Setup frame rendering logic
+      let pendingRender = false
+      let lastRenderedFrameId = -1
 
-      console.log('[useTauriCamera] Setting up frame callback, WebGL:', !!webglRenderer)
+      /**
+       * Schedules an async render for the latest frame.
+       * Uses requestAnimationFrame to render in sync with the display refresh rate.
+       * Returns a Promise that resolves when the frame has been rendered.
+       */
+      const addFrame = async (frame: FrameEvent): Promise<void> => {
+        // Skip if we already have a render scheduled or if this frame was already rendered
+        if (pendingRender || frame.frameId === lastRenderedFrameId) {
+          return
+        }
 
-      const frameCallback = webglRenderer
-        ? (frame: FrameEvent) => {
-            console.log(`[WebGL] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, ${frame.data.length} bytes, format: ${frame.format}`)
+        pendingRender = true
+
+        return new Promise((resolve) => {
+          requestAnimationFrame(() => {
+            
+
+            if (!state.isStreaming) {
+              resolve()
+              pendingRender = false
+              return
+            }
 
             const renderStart = performance.now()
+            lastRenderedFrameId = frame.frameId
 
             try {
-              const gl = webglRenderer!.gl
-              const program = webglRenderer!.program
-              const texture = webglRenderer!.texture
+              if (webglRenderer) {
+                // WebGL rendering
+                console.log(`[WebGL] Rendering frame #${frame.frameId}`)
+                const gl = webglRenderer.gl
+                const program = webglRenderer.program
+                const texture = webglRenderer.texture
 
-              // Check data size
-              const expectedSize = frame.width * frame.height * 4
-              if (frame.data.length !== expectedSize) {
-                console.error(`[WebGL] Data size mismatch! Expected ${expectedSize}, got ${frame.data.length}`)
-                return
+                // Check data size
+                const expectedSize = frame.width * frame.height * 4
+                if (frame.data.length !== expectedSize) {
+                  console.error(`[WebGL] Data size mismatch! Expected ${expectedSize}, got ${frame.data.length}`)
+                } else {
+                  // Update texture with frame data
+                  gl.bindTexture(gl.TEXTURE_2D, texture)
+                  gl.texImage2D(
+                    gl.TEXTURE_2D,
+                    0,
+                    gl.RGBA,
+                    frame.width,
+                    frame.height,
+                    0,
+                    gl.RGBA,
+                    gl.UNSIGNED_BYTE,
+                    frame.data
+                  )
+
+                  // Set horizontal flip
+                  const flipLocation = gl.getUniformLocation(program, 'u_flipHorizontal')
+                  gl.uniform1i(flipLocation, options?.flipHorizontal ? 1 : 0)
+
+                  // Draw
+                  gl.viewport(0, 0, canvas.width, canvas.height)
+                  gl.clearColor(0, 0, 0, 1)
+                  gl.clear(gl.COLOR_BUFFER_BIT)
+                  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+                  const renderTime = performance.now() - renderStart
+                  console.log(`[WebGL] Frame #${frame.frameId} rendered in ${renderTime.toFixed(2)}ms`)
+                }
+              } else {
+                // Canvas 2D rendering (fallback)
+                console.log(`[Canvas2D] Rendering frame #${frame.frameId}`)
+                // Note: renderFrameToCanvas serait importé de core.ts
+                // renderFrameToCanvas(canvas, frame, { flipHorizontal: options?.flipHorizontal })
               }
-
-              // Update texture directly with data (assuming RGBA)
-              console.log('[WebGL] Binding texture and uploading data...')
-              gl.bindTexture(gl.TEXTURE_2D, texture)
-              gl.texImage2D(
-                gl.TEXTURE_2D,
-                0,
-                gl.RGBA,
-                frame.width,
-                frame.height,
-                0,
-                gl.RGBA,
-                gl.UNSIGNED_BYTE,
-                frame.data
-              )
-
-              // Set horizontal flip
-              const flipLocation = gl.getUniformLocation(program, 'u_flipHorizontal')
-              gl.uniform1i(flipLocation, options?.flipHorizontal ? 1 : 0)
-
-              // Draw
-              console.log('[WebGL] Drawing...')
-              gl.viewport(0, 0, canvas.width, canvas.height)
-              gl.clearColor(0, 0, 0, 1)
-              gl.clear(gl.COLOR_BUFFER_BIT)
-              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-
-              const renderTime = performance.now() - renderStart
-              console.log(`[WebGL] Frame #${frame.frameId} rendered in ${renderTime.toFixed(2)}ms`)
-
-              // Call user callback
-              options?.onFrame?.(frame)
             } catch (error) {
-              console.error('[WebGL] Render error:', error)
+              pendingRender = false
+              console.error('[Render] Error:', error)
+              options?.onError?.(error as Error)
             }
-          }
-        : (frame: FrameEvent) => {
-            console.log(`[Canvas2D] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, format: ${frame.format}`)
-            options?.onFrame?.(frame)
-          }
+            pendingRender = false
+            resolve()
+          })
+        })
+      }
 
-      console.log('[useTauriCamera] Creating camera stream...')
-      state.currentStream = await createCameraStream(canvas, deviceId, {
-        flipHorizontal: options?.flipHorizontal ?? true,
-        onFrame: frameCallback,
+      // Create the stream - frames trigger rendering via addFrame()
+      state.currentStream = await createCameraStream(deviceId, {
+        onFrame: (frame) => {
+          console.log(`[useTauriCamera] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, format: ${frame.format}`)
+          
+          // Schedule async rendering for this frame
+          addFrame(frame)
+          
+          // Call user callback
+          options?.onFrame?.(frame)
+        },
         onError: (error) => {
           console.error('[useTauriCamera] Stream error:', error)
           options?.onError?.(error)
         },
       })
+
+      console.log('[useTauriCamera] Camera stream created successfully')
 
       console.log('Streaming started successfully')
       state.isStreaming = true

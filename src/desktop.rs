@@ -122,7 +122,13 @@ impl<R: Runtime> Camera<R> {
             }
 
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
+            if frame_id % 150 == 0 {
+                log::info!(
+                    " Frame #{} received (every 150 frames log) return",
+                    frame_id
+                );
+                return;
+            }
             // ⚡ Vérifier si le pool est plein AVANT de spawn
             let current_active = active_clone.load(std::sync::atomic::Ordering::Relaxed);
             if current_active >= 3 {
@@ -311,10 +317,13 @@ impl<R: Runtime> Camera<R> {
             let mut streams = self.active_streams.lock().await;
             if let Some(stream) = streams.get(&session_id) {
                 // Mark stream as stopped to prevent new frames from being processed
-                stream.running.store(false, std::sync::atomic::Ordering::Release);
+                stream
+                    .running
+                    .store(false, std::sync::atomic::Ordering::Release);
                 log::info!(" Marked stream {} as stopped", session_id);
             }
-            streams.remove(&session_id)
+            streams
+                .remove(&session_id)
                 .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?
         };
 

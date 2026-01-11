@@ -334,7 +334,7 @@ impl<R: Runtime> Camera<R> {
         );
 
         // Stop the camera
-        crabcamera::commands::capture::stop_camera_preview(stream.camera_id)
+        crabcamera::commands::capture::stop_camera_preview(stream.camera_id.clone())
             .await
             .map_err(|e| Error::CameraError(format!("Failed to stop camera: {}", e)))?;
 

@@ -108,13 +108,13 @@ pub fn nv12_to_rgba(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>>
         height,
     };
 
-    // ⚡ OPTIMISATION: Pré-allocation avec capacité exacte
-    let mut rgb_data = Vec::with_capacity(width_usize * height_usize * 3);
+    // ⚡ OPTIMISATION: Pré-allocation avec capacité exacte (RGBA = 4 bytes par pixel)
+    let mut rgb_data = Vec::with_capacity(width_usize * height_usize * 4);
     unsafe {
-        rgb_data.set_len(width_usize * height_usize * 3);
+        rgb_data.set_len(width_usize * height_usize * 4);
     }
 
-    let rgb_stride = width * 3;
+    let rgb_stride = width * 4;
 
     // ⚡ OPTIMISATION: Détection auto de la matrice couleur selon résolution
     let matrix = if width >= 1280 || height >= 720 {
@@ -176,7 +176,7 @@ mod tests {
         assert!(result.is_ok());
 
         let rgb_data = result.unwrap();
-        assert_eq!(rgb_data.len(), (width * height * 3) as usize);
+        assert_eq!(rgb_data.len(), (width * height * 4) as usize); // RGBA = 4 bytes per pixel
     }
 
     #[test]

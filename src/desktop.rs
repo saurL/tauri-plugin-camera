@@ -99,7 +99,7 @@ impl<R: Runtime> Camera<R> {
         let channel_clone = channel.clone();
 
         // Semaphore to limit concurrent conversions to 3
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
         let sem_clone = semaphore.clone();
 
         let callback = move |frame: crabcamera::CameraFrame| {

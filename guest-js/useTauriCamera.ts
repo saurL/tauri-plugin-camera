@@ -269,22 +269,23 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
       let frameDropCount = 0
 
       /**
-       * Schedules an async render for the latest frame.
+       * Schedules a render for the latest frame.
        * Uses requestAnimationFrame to render in sync with the display refresh rate.
        * Drops frames that arrive while a render is pending to prevent memory buildup.
-       * Returns a Promise that resolves when the frame has been rendered.
+       * NO Promise returned to avoid memory leaks from unawaited closures.
        */
-      const addFrame = async (frame: FrameEvent): Promise<void> => {
+      const addFrame = (frame: FrameEvent): void => {
         // If we already have a render scheduled, just replace the pending frame
         if (pendingRender) {
           if (latestPendingFrame && latestPendingFrame.frameId !== frame.frameId) {
             frameDropCount++
-            console.log(`[Frame Drop] Dropped frame #${latestPendingFrame.frameId}, total drops: ${frameDropCount}`)
+            if (frameDropCount % 10 === 0) {
+              console.log(`[Frame Drop] Dropped ${frameDropCount} frames total`)
+            }
           }
           latestPendingFrame = frame
           return
         }
-
 
         // Skip if this frame was already rendered
         if (frame.frameId === lastRenderedFrameId) {
@@ -294,20 +295,19 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
         pendingRender = true
         latestPendingFrame = frame
 
-        return new Promise((resolve) => {
-          requestAnimationFrame(() => {
-            // Use the latest frame (might have been updated while waiting)
-            const frameToRender = latestPendingFrame
-            latestPendingFrame = null
+        // Schedule render without creating a Promise
+        requestAnimationFrame(() => {
+          // Use the latest frame (might have been updated while waiting)
+          const frameToRender = latestPendingFrame
+          latestPendingFrame = null
 
-            if (!state.isStreaming || !frameToRender) {
-              resolve()
-              pendingRender = false
-              return
-            }
+          if (!state.isStreaming || !frameToRender) {
+            pendingRender = false
+            return
+          }
 
-            const renderStart = performance.now()
-            lastRenderedFrameId = frameToRender.frameId
+          const renderStart = performance.now()
+          lastRenderedFrameId = frameToRender.frameId
 
             try {
               if (webglRenderer) {
@@ -373,15 +373,12 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
                 // renderFrameToCanvas(canvas, frameToRender, { flipHorizontal: options?.flipHorizontal })
               }
             } catch (error) {
-              pendingRender = false
               console.error('[Render] Error:', error)
               options?.onError?.(error as Error)
             } finally {
-              // Always clear the pending flag and resolve
+              // Always clear the pending flag
               pendingRender = false
             }
-            resolve()
-          })
         })
       }
 

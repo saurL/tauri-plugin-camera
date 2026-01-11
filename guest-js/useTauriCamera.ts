@@ -262,45 +262,61 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
       // Setup frame rendering logic
       let pendingRender = false
       let lastRenderedFrameId = -1
+      let latestPendingFrame: FrameEvent | null = null
+      let frameDropCount = 0
 
       /**
        * Schedules an async render for the latest frame.
        * Uses requestAnimationFrame to render in sync with the display refresh rate.
+       * Drops frames that arrive while a render is pending to prevent memory buildup.
        * Returns a Promise that resolves when the frame has been rendered.
        */
       const addFrame = async (frame: FrameEvent): Promise<void> => {
-        // Skip if we already have a render scheduled or if this frame was already rendered
-        if (pendingRender || frame.frameId === lastRenderedFrameId) {
+        // If we already have a render scheduled, just replace the pending frame
+        if (pendingRender) {
+          if (latestPendingFrame && latestPendingFrame.frameId !== frame.frameId) {
+            frameDropCount++
+            console.log(`[Frame Drop] Dropped frame #${latestPendingFrame.frameId}, total drops: ${frameDropCount}`)
+          }
+          latestPendingFrame = frame
+          return
+        }
+
+        // Skip if this frame was already rendered
+        if (frame.frameId === lastRenderedFrameId) {
           return
         }
 
         pendingRender = true
+        latestPendingFrame = frame
 
         return new Promise((resolve) => {
           requestAnimationFrame(() => {
-            
+            // Use the latest frame (might have been updated while waiting)
+            const frameToRender = latestPendingFrame
+            latestPendingFrame = null
 
-            if (!state.isStreaming) {
+            if (!state.isStreaming || !frameToRender) {
               resolve()
               pendingRender = false
               return
             }
 
             const renderStart = performance.now()
-            lastRenderedFrameId = frame.frameId
+            lastRenderedFrameId = frameToRender.frameId
 
             try {
               if (webglRenderer) {
                 // WebGL rendering
-                console.log(`[WebGL] Rendering frame #${frame.frameId}`)
+                console.log(`[WebGL] Rendering frame #${frameToRender.frameId}`)
                 const gl = webglRenderer.gl
                 const program = webglRenderer.program
                 const texture = webglRenderer.texture
 
                 // Check data size
-                const expectedSize = frame.width * frame.height * 4
-                if (frame.data.length !== expectedSize) {
-                  console.error(`[WebGL] Data size mismatch! Expected ${expectedSize}, got ${frame.data.length}`)
+                const expectedSize = frameToRender.width * frameToRender.height * 4
+                if (frameToRender.data.length !== expectedSize) {
+                  console.error(`[WebGL] Data size mismatch! Expected ${expectedSize}, got ${frameToRender.data.length}`)
                 } else {
                   // Update texture with frame data
                   gl.bindTexture(gl.TEXTURE_2D, texture)
@@ -308,12 +324,12 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
                     gl.TEXTURE_2D,
                     0,
                     gl.RGBA,
-                    frame.width,
-                    frame.height,
+                    frameToRender.width,
+                    frameToRender.height,
                     0,
                     gl.RGBA,
                     gl.UNSIGNED_BYTE,
-                    frame.data
+                    frameToRender.data
                   )
 
                   // Set horizontal flip
@@ -327,20 +343,22 @@ const createWebGLRenderer = (canvas: HTMLCanvasElement): WebGLRenderer => {
                   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
                   const renderTime = performance.now() - renderStart
-                  console.log(`[WebGL] Frame #${frame.frameId} rendered in ${renderTime.toFixed(2)}ms`)
+                  console.log(`[WebGL] Frame #${frameToRender.frameId} rendered in ${renderTime.toFixed(2)}ms`)
                 }
               } else {
                 // Canvas 2D rendering (fallback)
-                console.log(`[Canvas2D] Rendering frame #${frame.frameId}`)
+                console.log(`[Canvas2D] Rendering frame #${frameToRender.frameId}`)
                 // Note: renderFrameToCanvas serait importé de core.ts
-                // renderFrameToCanvas(canvas, frame, { flipHorizontal: options?.flipHorizontal })
+                // renderFrameToCanvas(canvas, frameToRender, { flipHorizontal: options?.flipHorizontal })
               }
             } catch (error) {
               pendingRender = false
               console.error('[Render] Error:', error)
               options?.onError?.(error as Error)
+            } finally {
+              // Always clear the pending flag and resolve
+              pendingRender = false
             }
-            pendingRender = false
             resolve()
           })
         })

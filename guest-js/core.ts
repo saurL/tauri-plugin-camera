@@ -279,6 +279,12 @@ export async function createCameraStream(
     if (!running) return
 
     try {
+      // Clear the old frame data to free memory
+      if (latestFrame) {
+        // Help garbage collector by clearing the reference
+        latestFrame = null
+      }
+
       // Update the buffer with the latest frame
       latestFrame = frame
       frameCount++

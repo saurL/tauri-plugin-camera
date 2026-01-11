@@ -278,7 +278,7 @@ impl<R: Runtime> Camera<R> {
             camera_id: camera,
             start_time: Instant::now(),
             _frame_counter: frame_counter,
-            _channel: channely,
+            _channel: channel,
         };
 
         self.active_streams

@@ -16,7 +16,7 @@ mod models;
 mod utils;
 
 pub use error::{Error, Result};
-pub use utils::{nv12_to_rgba, yuv_to_rgb};
+pub use utils::{nv12_to_rgba, yuv_to_rgba};
 
 #[cfg(desktop)]
 use desktop::Camera;

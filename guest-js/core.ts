@@ -134,6 +134,7 @@ export async function startStreaming(
     // If already processing, drop this frame immediately to prevent memory buildup
     if (isProcessing) {
       console.log(`[Channel] Frame #${frame.frameId} DROPPED - already processing`)
+      frame=null as any  // Help GC
       return
     }
 
@@ -143,7 +144,7 @@ export async function startStreaming(
 
     // Process frame directly without storing in latestFrame
     // Use microtask to process frame asynchronously without blocking the channel
-    //Promise.resolve().then(() => {
+    Promise.resolve().then(() => {
       const processStart = performance.now()
       try {
         onFrame(frame)
@@ -155,7 +156,7 @@ export async function startStreaming(
 
       // Mark as done
       isProcessing = false
-    //}
+    })
   }
 
   return invoke<string>('plugin:camera|start_streaming', {

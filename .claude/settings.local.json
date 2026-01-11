@@ -6,7 +6,8 @@
       "Bash(cargo build:*)",
       "Bash(test:*)",
       "Bash(ls \"C:\\\\Programmation\\\\eye-tracker\\\\src-tauri\\\\capabilities\"\" 2>/dev/null || echo \"No capabilities folder \")",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(pnpm build)"
     ]
   }
 }

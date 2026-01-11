@@ -127,40 +127,35 @@ export async function startStreaming(
   // Use a Tauri Channel for ordered, low-latency frame delivery.
   const channel = new Channel<FrameEvent>()
 
-  // Frame buffer: only keep the latest frame to prevent memory leaks
-  let latestFrame: FrameEvent | null = null
+  // Track if we're currently processing a frame to prevent memory buildup
   let isProcessing = false
 
   channel.onmessage = (frame) => {
+    // If already processing, drop this frame immediately to prevent memory buildup
+    if (isProcessing) {
+      console.log(`[Channel] Frame #${frame.frameId} DROPPED - already processing`)
+      return
+    }
+
     console.log(`[Channel] Frame #${frame.frameId} received - ${frame.width}x${frame.height}, ${frame.data.length} bytes, format: ${frame.format}`)
 
-    // Drop old frame and replace with new one (prevents memory buildup)
-    if (latestFrame) {
-      console.log(`[Channel] Dropping old frame #${latestFrame.frameId}, replacing with #${frame.frameId}`)
-    }
-    latestFrame = frame
+    isProcessing = true
 
-    // Schedule processing if not already processing
-    if (!isProcessing) {
-      isProcessing = true
-      // Use microtask to process frame asynchronously without blocking the channel
-      Promise.resolve().then(() => {
-        const frameToProcess = latestFrame
-        latestFrame = null // Clear reference immediately
-        isProcessing = false
+    // Process frame directly without storing in latestFrame
+    // Use microtask to process frame asynchronously without blocking the channel
+    Promise.resolve().then(() => {
+      const processStart = performance.now()
+      try {
+        onFrame(frame)
+      } catch (error) {
+        console.error(`[Channel] Error processing frame #${frame.frameId}:`, error)
+      }
+      const processDuration = performance.now() - processStart
+      console.log(`[Channel] Frame #${frame.frameId} processed in ${processDuration.toFixed(2)}ms`)
 
-        if (frameToProcess) {
-          const processStart = performance.now()
-          try {
-            onFrame(frameToProcess)
-          } catch (error) {
-            console.error(`[Channel] Error processing frame #${frameToProcess.frameId}:`, error)
-          }
-          const processDuration = performance.now() - processStart
-          console.log(`[Channel] Frame #${frameToProcess.frameId} processed in ${processDuration.toFixed(2)}ms`)
-        }
-      })
-    }
+      // Mark as done
+      isProcessing = false
+    })
   }
 
   return invoke<string>('plugin:camera|start_streaming', {

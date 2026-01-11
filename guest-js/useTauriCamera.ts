@@ -4,7 +4,7 @@ import {
   createCameraStream,
   type CameraDeviceInfo,
   type FrameEvent
-} from './index'
+} from './core'
 
 export type { CameraDeviceInfo, FrameEvent }
 

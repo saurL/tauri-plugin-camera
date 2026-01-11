@@ -13,8 +13,10 @@ mod mobile;
 mod commands;
 mod error;
 mod models;
+mod utils;
 
 pub use error::{Error, Result};
+pub use utils::{nv12_to_rgb, yuv_to_rgb};
 
 #[cfg(desktop)]
 use desktop::Camera;

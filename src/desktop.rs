@@ -1,13 +1,12 @@
 use crate::error::{Error, Result};
+use crate::utils::{nv12_to_rgb, yuv_to_rgb};
 use crabcamera::init::initialize_camera_system;
 use crabcamera::permissions::PermissionInfo;
 use crabcamera::CameraDeviceInfo;
 use crabcamera::{
-    get_available_cameras, get_recommended_format, request_camera_permission, set_raw_callback,
+    get_available_cameras, get_recommended_format, request_camera_permission, set_callback,
     start_camera_preview,
 };
-use nokhwa::pixel_format::RgbFormat;
-use nokhwa::utils::FrameFormat;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -24,7 +23,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
         active_streams: Arc::new(AsyncMutex::new(HashMap::new())),
     })
 }
-use nokhwa::{Buffer, FormatDecoder};
+
 struct ActiveStream {
     camera_id: String,
     start_time: Instant,
@@ -102,7 +101,7 @@ impl<R: Runtime> Camera<R> {
         // Semaphore to limit concurrent conversions to 3
         let semaphore = Arc::new(tokio::sync::Semaphore::new(3));
         let sem_clone = semaphore.clone();
-        /*
+
         let callback = move |frame: crabcamera::CameraFrame| {
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
@@ -259,98 +258,7 @@ impl<R: Runtime> Camera<R> {
         set_callback(device_id.clone(), callback)
             .await
             .map_err(|e| Error::CameraError(format!("Failed to set callback: {}", e)))?;
-        */
-        let callback = move |buffer: Buffer| {
-            let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-            let receive_time = std::time::Instant::now();
-
-            // Try to acquire semaphore permit (skip if 3 conversions already running)
-            let permit = match sem_clone.clone().try_acquire_owned() {
-                Ok(p) => p,
-                Err(_) => {
-                    log::debug!(
-                        "⏭️  Frame #{} skipped - conversion slots full (3/3 busy)",
-                        frame_id
-                    );
-                    return;
-                }
-            };
-            // Clone for async task
-            let frame_channel = channel_clone.clone();
-
-            // Spawn async task to avoid blocking camera thread
-            spawn(async move {
-                let _permit = permit;
-                log::debug!("🔓 Frame #{} acquired conversion slot", frame_id);
-
-                // Get buffer info
-                let width = buffer.resolution().width();
-                let height = buffer.resolution().height();
-                let format = format!("{:?}", buffer.source_frame_format());
-
-                log::info!(
-                    "📹 Frame #{} received at {:?}: {}x{}, format: {}",
-                    frame_id,
-                    receive_time,
-                    width,
-                    height,
-                    format
-                );
-
-                // Buffer is already decoded, just convert to RGB if needed
-                let rgb_data = match buffer.source_frame_format() {
-                    FrameFormat::RAWRGB => {
-                        log::info!("✅ Format is already RGB, using buffer directly");
-                        buffer.buffer().to_vec()
-                    }
-                    _ => {
-                        // Decode to RGB using nokhwa's built-in decoder
-                        log::info!("🔄 Decoding buffer to RGB...");
-                        let decoded = match buffer.decode_image::<RgbFormat>() {
-                            Ok(img) => img,
-                            Err(e) => {
-                                log::error!("❌ Decoding failed: {:?}", e);
-                                return;
-                            }
-                        };
-                        decoded.into_vec()
-                    }
-                };
-
-                let timestamp_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
-
-                let frame_event = crate::models::FrameEvent {
-                    frame_id,
-                    data: rgb_data,
-                    width,
-                    height,
-                    timestamp_ms,
-                    format: "RGB8".to_string(),
-                };
-
-                let send_time = std::time::Instant::now();
-                let processing_duration = send_time.duration_since(receive_time);
-
-                if let Err(e) = frame_channel.send(frame_event) {
-                    log::error!("❌ Frame #{} failed to send: {}", frame_id, e);
-                } else {
-                    log::info!(
-                        "✅ Frame #{} sent at {:?} (processing took {:?})",
-                        frame_id,
-                        send_time,
-                        processing_duration
-                    );
-                }
-            });
-        };
-
-        set_raw_callback(device_id.clone(), callback)
-            .await
-            .map_err(|e| Error::CameraError(format!("Failed to set callback: {}", e)))?;
         let session_id = uuid::Uuid::new_v4().to_string();
         let active_stream = ActiveStream {
             camera_id: camera,

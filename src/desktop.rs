@@ -22,14 +22,11 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
         active_streams: Arc::new(AsyncMutex::new(HashMap::new())),
     })
 }
-use rayon::ThreadPoolBuilder;
-
 struct ActiveStream {
     camera_id: String,
     start_time: Instant,
     _frame_counter: Arc<std::sync::atomic::AtomicU64>,
     _channel: Channel<crate::models::FrameEvent>,
-    _pool: Arc<rayon::ThreadPool>,
     running: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -92,28 +89,25 @@ impl<R: Runtime> Camera<R> {
         let format = get_recommended_format()
             .await
             .map_err(|e| Error::CameraError(format!("Failed to get recommended format : {}", e)))?;
-        let camera = start_camera_preview(device_id.clone(), Some(format))
+        let _camera = start_camera_preview(device_id.clone(), Some(format))
             .await
             .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
 
         let frame_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let counter_clone = frame_counter.clone();
 
-        let active = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let active_clone = active.clone();
         let channel_clone = channel.clone();
 
         // Flag to signal when stream should stop processing
         let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
         let running_clone = running.clone();
 
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(3) // 3 threads pour les conversions
-            .thread_name(|i| format!("camera-convert-{}", i))
-            .build()
-            .unwrap();
-        let pool = Arc::new(pool);
-        let pool_clone = pool.clone();
+        // FPS limiter: Track last frame processing time to cap at 80 FPS
+        let last_frame_time = Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
+        let last_frame_clone = last_frame_time.clone();
+
+        const MIN_FRAME_INTERVAL_MS: u128 = 12; // ~83 FPS max (1000/12 ≈ 83 FPS)
+
         let callback = move |frame: crabcamera::CameraFrame| {
             // Check if stream is still running (prevents memory leak after stop)
             if !running_clone.load(std::sync::atomic::Ordering::Relaxed) {
@@ -122,170 +116,146 @@ impl<R: Runtime> Camera<R> {
             }
 
             let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            if frame_id % 150 != 0 {
-                log::info!(
-                    " Frame #{} received (every 150 frames log) return",
-                    frame_id
-                );
-                return;
-            }
-            // ⚡ Vérifier si le pool est plein AVANT de spawn
-            let current_active = active_clone.load(std::sync::atomic::Ordering::Relaxed);
-            if current_active >= 3 {
-                log::debug!(
-                    "SKIP  Frame #{} skipped - pool full ({}/3 conversions active)",
-                    frame_id,
-                    current_active
-                );
-                return;
-            }
-
-            // ⚡ Incrémenter le compteur AVANT de spawn
-            let new_active = active_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-            // Double check
-            if new_active >= 3 {
-                active_clone.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-                log::debug!("SKIP  Frame #{} skipped - pool became full", frame_id);
-                return;
-            }
-
             let receive_time = std::time::Instant::now();
 
-            //  Clone TOUS les Arc nécessaires pour le spawn
-            let frame_channel = channel_clone.clone();
-            let pool_inner = pool_clone.clone();
-            let active_inner = active_clone.clone(); // ← MANQUANT dans votre code !
+            // FPS limiter: Check if enough time has passed since last processed frame
+            {
+                let mut last_time = last_frame_clone.lock().unwrap();
+                let elapsed = receive_time.duration_since(*last_time).as_millis();
 
-            // Spawn sur le pool
-            pool_inner.spawn(move || {
-                // Guard pour décrémenter automatiquement
-                struct DecOnDrop(Arc<std::sync::atomic::AtomicUsize>);
-                impl Drop for DecOnDrop {
-                    fn drop(&mut self) {
-                        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                if elapsed < MIN_FRAME_INTERVAL_MS {
+                    if frame_id % 100 == 0 {
+                        log::debug!(
+                            "SKIP  Frame #{} skipped - FPS cap ({}ms < {}ms)",
+                            frame_id,
+                            elapsed,
+                            MIN_FRAME_INTERVAL_MS
+                        );
                     }
-                }
-                let _guard = DecOnDrop(active_inner);
-
-                log::info!(
-                    " Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
-                    frame_id,
-                    receive_time,
-                    frame.width,
-                    frame.height,
-                    frame.format,
-                    frame.data.len()
-                );
-
-                // ⏱️ MESURE 1: Avant conversion
-                let before_conversion = std::time::Instant::now();
-                let time_to_start = before_conversion.duration_since(receive_time.clone());
-                log::info!(
-                    "⏱️  Frame #{} - Time to start conversion: {:?}",
-                    frame_id,
-                    time_to_start
-                );
-
-                // Track the output format
-                let (rgb_data, output_format) = match frame.format.as_str() {
-                    "NV12" => {
-                        log::info!(" Converting NV12 to RGBA...");
-                        let conversion_start = std::time::Instant::now();
-
-                        match nv12_to_rgba(&frame.data, frame.width, frame.height) {
-                            Ok(data) => {
-                                let conversion_time = conversion_start.elapsed();
-                                log::info!(
-                                    " NV12 conversion took {:?}, output size: {} bytes (RGBA)",
-                                    conversion_time,
-                                    data.len()
-                                );
-                                (data, "RGBA")
-                            }
-                            Err(e) => {
-                                log::error!("ERROR NV12 conversion failed: {:?}", e);
-                                return; // Le guard décrémente automatiquement
-                            }
-                        }
-                    }
-                    "RGB8" => {
-                        log::info!(" Format is already RGB8, no conversion needed");
-                        (frame.data, "RGB8")
-                    }
-                    "YUV" => {
-                        log::info!(" Converting YUV to RGBA...");
-                        let conversion_start = std::time::Instant::now();
-
-                        match yuv_to_rgba(&frame.data, frame.width, frame.height) {
-                            Ok(data) => {
-                                let conversion_time = conversion_start.elapsed();
-                                log::info!(
-                                    " YUV conversion took {:?}, output size: {} bytes (RGBA)",
-                                    conversion_time,
-                                    data.len()
-                                );
-                                (data, "RGBA")
-                            }
-                            Err(e) => {
-                                log::error!("ERROR YUV conversion failed: {:?}", e);
-                                return;
-                            }
-                        }
-                    }
-                    _ => {
-                        log::error!("ERROR Unsupported frame format: {}", frame.format);
-                        return;
-                    }
-                };
-
-                // ⏱️ MESURE 2: Après conversion, avant création FrameEvent
-                let before_frame_event = std::time::Instant::now();
-
-                let timestamp_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
-
-                let frame_event = crate::models::FrameEvent {
-                    frame_id,
-                    data: rgb_data,
-                    width: frame.width,
-                    height: frame.height,
-                    timestamp_ms,
-                    format: output_format.to_string(),
-                };
-
-                let frame_event_time = before_frame_event.elapsed();
-                log::info!(
-                    "⏱️  Frame #{} - FrameEvent creation took {:?}",
-                    frame_id,
-                    frame_event_time
-                );
-
-                // ⏱️ MESURE 3: Channel send
-                let before_send = std::time::Instant::now();
-
-                if let Err(e) = frame_channel.send(frame_event) {
-                    log::error!("ERROR Frame #{} failed to send: {}", frame_id, e);
-                } else {
-                    let send_time = before_send.elapsed();
-                    let total_time = receive_time.elapsed();
-
-                    log::info!(
-                        "⏱️  Frame #{} - Channel send took {:?}",
-                        frame_id,
-                        send_time
-                    );
-                    log::info!(
-                        " Frame #{} TOTAL processing time: {:?}",
-                        frame_id,
-                        total_time
-                    );
+                    return;
                 }
 
-                // Le guard (_guard) est drop ici automatiquement
-            });
+                // Update last frame time BEFORE processing to include conversion time
+                *last_time = receive_time;
+            }
+
+            // Process frame synchronously (no thread pool = no object accumulation)
+
+            log::info!(
+                " Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
+                frame_id,
+                receive_time,
+                frame.width,
+                frame.height,
+                frame.format,
+                frame.data.len()
+            );
+
+            // ⏱️ MESURE 1: Avant conversion
+            let before_conversion = std::time::Instant::now();
+            let time_to_start = before_conversion.duration_since(receive_time);
+            log::info!(
+                "⏱️  Frame #{} - Time to start conversion: {:?}",
+                frame_id,
+                time_to_start
+            );
+
+            // Track the output format
+            let (rgb_data, output_format) = match frame.format.as_str() {
+                "NV12" => {
+                    log::info!(" Converting NV12 to RGBA...");
+                    let conversion_start = std::time::Instant::now();
+
+                    match nv12_to_rgba(&frame.data, frame.width, frame.height) {
+                        Ok(data) => {
+                            let conversion_time = conversion_start.elapsed();
+                            log::info!(
+                                " NV12 conversion took {:?}, output size: {} bytes (RGBA)",
+                                conversion_time,
+                                data.len()
+                            );
+                            (data, "RGBA")
+                        }
+                        Err(e) => {
+                            log::error!("ERROR NV12 conversion failed: {:?}", e);
+                            return;
+                        }
+                    }
+                }
+                "RGB8" => {
+                    log::info!(" Format is already RGB8, no conversion needed");
+                    (frame.data, "RGB8")
+                }
+                "YUV" => {
+                    log::info!(" Converting YUV to RGBA...");
+                    let conversion_start = std::time::Instant::now();
+
+                    match yuv_to_rgba(&frame.data, frame.width, frame.height) {
+                        Ok(data) => {
+                            let conversion_time = conversion_start.elapsed();
+                            log::info!(
+                                " YUV conversion took {:?}, output size: {} bytes (RGBA)",
+                                conversion_time,
+                                data.len()
+                            );
+                            (data, "RGBA")
+                        }
+                        Err(e) => {
+                            log::error!("ERROR YUV conversion failed: {:?}", e);
+                            return;
+                        }
+                    }
+                }
+                _ => {
+                    log::error!("ERROR Unsupported frame format: {}", frame.format);
+                    return;
+                }
+            };
+
+            // ⏱️ MESURE 2: Après conversion, avant création FrameEvent
+            let before_frame_event = std::time::Instant::now();
+
+            let timestamp_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+
+            let frame_event = crate::models::FrameEvent {
+                frame_id,
+                data: rgb_data,
+                width: frame.width,
+                height: frame.height,
+                timestamp_ms,
+                format: output_format.to_string(),
+            };
+
+            let frame_event_time = before_frame_event.elapsed();
+            log::info!(
+                "⏱️  Frame #{} - FrameEvent creation took {:?}",
+                frame_id,
+                frame_event_time
+            );
+
+            // ⏱️ MESURE 3: Channel send
+            let before_send = std::time::Instant::now();
+
+            if let Err(e) = channel_clone.send(frame_event) {
+                log::error!("ERROR Frame #{} failed to send: {}", frame_id, e);
+            } else {
+                let send_time = before_send.elapsed();
+                let total_time = receive_time.elapsed();
+
+                log::info!(
+                    "⏱️  Frame #{} - Channel send took {:?}",
+                    frame_id,
+                    send_time
+                );
+                log::info!(
+                    " Frame #{} TOTAL processing time: {:?}",
+                    frame_id,
+                    total_time
+                );
+            }
         };
         set_callback(device_id.clone(), callback)
             .await
@@ -297,7 +267,6 @@ impl<R: Runtime> Camera<R> {
             start_time: Instant::now(),
             _frame_counter: frame_counter,
             _channel: channel,
-            _pool: pool,
             running,
         };
 

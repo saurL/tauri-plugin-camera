@@ -16,7 +16,7 @@ A Tauri plugin for camera management with WebRTC streaming capabilities. Built o
 > - Camera compatibility reports
 > - Pull requests for additional video formats and quality improvements
 > - Performance optimization suggestions
-> - My golal is not to make it work on android/ios right now but open to contributing PRs for mobile support.
+> - My golal isn't to make it work on android/ios right now but open to contributing PRs for mobile support.
 
 ## Platform Support
 

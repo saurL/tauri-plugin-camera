@@ -9,8 +9,8 @@ export interface CameraDeviceInfo {
 // Types mirrored from Rust (src/webrtc.rs)
 export interface IceServer {
   urls: string[]
-  username?: string
-  credential?: string
+  username: string
+  credential: string
 }
 
 export interface SessionDescription {

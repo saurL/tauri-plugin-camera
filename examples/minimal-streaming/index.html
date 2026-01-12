@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Camera Streaming - Minimal Example</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="container">
+      <h1>Camera Streaming Example</h1>
+
+      <div class="controls">
+        <select id="camera-select" disabled>
+          <option value="">Select a camera...</option>
+        </select>
+        <button id="start-stream" disabled>Start Stream</button>
+        <button id="stop-stream" disabled>Stop Stream</button>
+      </div>
+
+      <div class="camera-list" id="camera-list"></div>
+
+      <div class="video-container">
+        <canvas id="camera-canvas"></canvas>
+        <div id="status">Loading cameras...</div>
+      </div>
+    </main>
+  </body>
+</html>

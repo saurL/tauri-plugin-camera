@@ -1,0 +1,145 @@
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+
+  color: #0f0f0f;
+  background-color: #f6f6f6;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+button,
+select {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  color: #0f0f0f;
+  background-color: #ffffff;
+  transition: border-color 0.25s;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  outline: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: #396cd8;
+}
+
+button:active:not(:disabled) {
+  border-color: #396cd8;
+  background-color: #e8e8e8;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+select {
+  min-width: 200px;
+}
+
+.camera-list {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.camera-item {
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.video-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+#camera-canvas {
+  max-width: 100%;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  background: #000;
+}
+
+#status {
+  padding: 1rem;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #f6f6f6;
+    background-color: #2f2f2f;
+  }
+
+  button,
+  select {
+    color: #ffffff;
+    background-color: #0f0f0f98;
+  }
+
+  button:active:not(:disabled) {
+    background-color: #0f0f0f69;
+  }
+
+  .camera-list,
+  #status {
+    background-color: #1f1f1f;
+  }
+
+  .camera-item {
+    background: #2f2f2f;
+  }
+}

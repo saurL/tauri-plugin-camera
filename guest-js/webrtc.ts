@@ -1,5 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 
+// Types mirrored from Rust (src/models.rs)
+export interface CameraDeviceInfo {
+  deviceId: string
+  label: string
+}
+
 // Types mirrored from Rust (src/webrtc.rs)
 export interface IceServer {
   urls: string[]
@@ -16,6 +22,15 @@ export interface IceCandidateInitLike {
   candidate: string
   sdpMid?: string
   sdpMlineIndex?: number
+}
+
+// Camera management functions
+export async function getAvailableCameras(): Promise<CameraDeviceInfo[]> {
+  return invoke<CameraDeviceInfo[]>('plugin:camera|get_available_cameras')
+}
+
+export async function initialize(): Promise<string> {
+  return invoke<string>('plugin:camera|initialize')
 }
 
 // Normalize helpers (JS camelCase -> Rust snake_case where needed)

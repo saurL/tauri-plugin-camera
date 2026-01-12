@@ -5,6 +5,7 @@ use tauri::{
 
 pub use crabcamera::permissions::PermissionStatus;
 pub use models::*;
+
 #[cfg(desktop)]
 mod desktop;
 #[cfg(mobile)]
@@ -14,9 +15,9 @@ mod commands;
 mod error;
 mod models;
 mod utils;
-
+mod webrtc;
+use commands::*;
 pub use error::{Error, Result};
-pub use utils::{nv12_to_rgba, yuv_to_rgba};
 
 #[cfg(desktop)]
 use desktop::Camera;
@@ -38,11 +39,18 @@ impl<R: Runtime, T: Manager<R>> crate::CameraExt<R> for T {
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("camera")
         .invoke_handler(tauri::generate_handler![
-            commands::request_camera_permission,
-            commands::get_available_cameras,
-            commands::start_streaming,
-            commands::stop_streaming,
-            commands::initialize
+            request_camera_permission,
+            get_available_cameras,
+            initialize,
+            create_offer,
+            create_answer,
+            set_remote_description,
+            add_ice_candidate,
+            close_connection,
+            get_connection_state,
+            start_camera_webrtc_session,
+            start_streaming,
+            stop_streaming
         ])
         .setup(|app, api| {
             #[cfg(mobile)]

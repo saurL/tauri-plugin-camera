@@ -1,39 +1,39 @@
 use crate::error::{Error, Result};
-use crate::utils::{nv12_to_rgba, yuv_to_rgba};
+use crate::models::FrameEvent;
+use crate::utils::yuv_to_h264;
 use crabcamera::init::initialize_camera_system;
 use crabcamera::permissions::PermissionInfo;
-use crabcamera::CameraDeviceInfo;
-use crabcamera::{
-    get_available_cameras, get_recommended_format, request_camera_permission, set_callback,
-    start_camera_preview,
-};
+use crabcamera::{get_available_cameras, request_camera_permission};
+use crabcamera::{get_recommended_format, set_callback, start_camera_preview, CameraDeviceInfo};
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Instant;
-use tauri::{ipc::Channel, plugin::PluginApi, AppHandle, Runtime};
+use tauri::{plugin::PluginApi, AppHandle, Runtime};
+use tokio::sync::watch;
 use tokio::sync::Mutex as AsyncMutex;
+use tokio::time::Instant;
 pub fn init<R: Runtime, C: DeserializeOwned>(
     app: &AppHandle<R>,
     _api: PluginApi<R, C>,
 ) -> Result<Camera<R>> {
+    let webrtc_manager = crate::webrtc::WebRTCManager::new();
+
     Ok(Camera {
         _app: app.clone(),
-        active_streams: Arc::new(AsyncMutex::new(HashMap::new())),
+        webrtc_manager,
+        active_streams: AsyncMutex::new(HashMap::new()),
     })
 }
+
 struct ActiveStream {
     camera_id: String,
     start_time: Instant,
-    _frame_counter: Arc<std::sync::atomic::AtomicU64>,
-    _channel: Channel<crate::models::FrameEvent>,
-    running: Arc<std::sync::atomic::AtomicBool>,
+    rx: watch::Receiver<Option<FrameEvent>>,
 }
-
 /// Access to the camera APIs.
 pub struct Camera<R: Runtime> {
     _app: AppHandle<R>,
-    active_streams: Arc<AsyncMutex<HashMap<String, ActiveStream>>>,
+    pub webrtc_manager: crate::webrtc::WebRTCManager,
+    active_streams: AsyncMutex<HashMap<String, ActiveStream>>,
 }
 
 impl<R: Runtime> Camera<R> {
@@ -59,23 +59,7 @@ impl<R: Runtime> Camera<R> {
         Ok(devices)
     }
 
-    pub async fn start_stream_default_camera(
-        &self,
-        on_frame: Channel<crate::models::FrameEvent>,
-    ) -> Result<String> {
-        let devices = self.get_available_cameras().await?;
-        if let Some(camera) = devices.first() {
-            self.start_stream(camera.id.clone(), on_frame).await
-        } else {
-            Err(Error::CameraError("No camera devices found".to_string()))
-        }
-    }
-
-    pub async fn start_stream(
-        &self,
-        device_id: String,
-        channel: Channel<crate::models::FrameEvent>,
-    ) -> Result<String> {
+    pub async fn start_streaming(&self, device_id: String) -> Result<String> {
         // Check if streaming is already active for this device
         {
             let streams = self.active_streams.lock().await;
@@ -93,168 +77,20 @@ impl<R: Runtime> Camera<R> {
             .await
             .map_err(|e| Error::CameraError(format!("Failed to start camera preview: {}", e)))?;
 
-        let frame_counter = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let counter_clone = frame_counter.clone();
+        // Create watch channel for frame events
+        let (tx, rx) = watch::channel(None);
 
-        let channel_clone = channel.clone();
-
-        // Flag to signal when stream should stop processing
-        let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let running_clone = running.clone();
-
-        // FPS limiter: Track last frame processing time to cap at 80 FPS
-        let last_frame_time = Arc::new(std::sync::Mutex::new(std::time::Instant::now()));
-        let last_frame_clone = last_frame_time.clone();
-
-        const MIN_FRAME_INTERVAL_MS: u128 = 12; // ~83 FPS max (1000/12 ≈ 83 FPS)
-
+        let tx_clone = tx.clone();
         let callback = move |frame: crabcamera::CameraFrame| {
-            // Check if stream is still running (prevents memory leak after stop)
-            if !running_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                log::debug!("STOP  Stream stopped, dropping frame");
-                return;
-            }
-
-            let frame_id = counter_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            let receive_time = std::time::Instant::now();
-
-            // FPS limiter: Check if enough time has passed since last processed frame
-            {
-                let mut last_time = last_frame_clone.lock().unwrap();
-                let elapsed = receive_time.duration_since(*last_time).as_millis();
-
-                if elapsed < MIN_FRAME_INTERVAL_MS {
-                    if frame_id % 100 == 0 {
-                        log::debug!(
-                            "SKIP  Frame #{} skipped - FPS cap ({}ms < {}ms)",
-                            frame_id,
-                            elapsed,
-                            MIN_FRAME_INTERVAL_MS
-                        );
-                    }
-                    return;
-                }
-
-                // Update last frame time BEFORE processing to include conversion time
-                *last_time = receive_time;
-            }
-
-            // Process frame synchronously (no thread pool = no object accumulation)
-
-            log::info!(
-                " Frame #{} received at {:?}: {}x{}, format: {}, data size: {} bytes",
-                frame_id,
-                receive_time,
-                frame.width,
-                frame.height,
-                frame.format,
-                frame.data.len()
-            );
-
-            // ⏱️ MESURE 1: Avant conversion
-            let before_conversion = std::time::Instant::now();
-            let time_to_start = before_conversion.duration_since(receive_time);
-            log::info!(
-                "⏱️  Frame #{} - Time to start conversion: {:?}",
-                frame_id,
-                time_to_start
-            );
-
-            // Track the output format
-            let (rgb_data, output_format) = match frame.format.as_str() {
-                "NV12" => {
-                    log::info!(" Converting NV12 to RGBA...");
-                    let conversion_start = std::time::Instant::now();
-
-                    match nv12_to_rgba(&frame.data, frame.width, frame.height) {
-                        Ok(data) => {
-                            let conversion_time = conversion_start.elapsed();
-                            log::info!(
-                                " NV12 conversion took {:?}, output size: {} bytes (RGBA)",
-                                conversion_time,
-                                data.len()
-                            );
-                            (data, "RGBA")
-                        }
-                        Err(e) => {
-                            log::error!("ERROR NV12 conversion failed: {:?}", e);
-                            return;
-                        }
-                    }
-                }
-                "RGB8" => {
-                    log::info!(" Format is already RGB8, no conversion needed");
-                    (frame.data, "RGB8")
-                }
-                "YUV" => {
-                    log::info!(" Converting YUV to RGBA...");
-                    let conversion_start = std::time::Instant::now();
-
-                    match yuv_to_rgba(&frame.data, frame.width, frame.height) {
-                        Ok(data) => {
-                            let conversion_time = conversion_start.elapsed();
-                            log::info!(
-                                " YUV conversion took {:?}, output size: {} bytes (RGBA)",
-                                conversion_time,
-                                data.len()
-                            );
-                            (data, "RGBA")
-                        }
-                        Err(e) => {
-                            log::error!("ERROR YUV conversion failed: {:?}", e);
-                            return;
-                        }
-                    }
-                }
-                _ => {
-                    log::error!("ERROR Unsupported frame format: {}", frame.format);
-                    return;
-                }
-            };
-
-            // ⏱️ MESURE 2: Après conversion, avant création FrameEvent
-            let before_frame_event = std::time::Instant::now();
-
-            let timestamp_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64;
-
-            let frame_event = crate::models::FrameEvent {
-                frame_id,
-                data: rgb_data,
+            let event = FrameEvent {
                 width: frame.width,
                 height: frame.height,
-                timestamp_ms,
-                format: output_format.to_string(),
+                data: frame.data,
+                format: frame.format,
             };
 
-            let frame_event_time = before_frame_event.elapsed();
-            log::info!(
-                "⏱️  Frame #{} - FrameEvent creation took {:?}",
-                frame_id,
-                frame_event_time
-            );
-
-            // ⏱️ MESURE 3: Channel send
-            let before_send = std::time::Instant::now();
-
-            if let Err(e) = channel_clone.send(frame_event) {
-                log::error!("ERROR Frame #{} failed to send: {}", frame_id, e);
-            } else {
-                let send_time = before_send.elapsed();
-                let total_time = receive_time.elapsed();
-
-                log::info!(
-                    "⏱️  Frame #{} - Channel send took {:?}",
-                    frame_id,
-                    send_time
-                );
-                log::info!(
-                    " Frame #{} TOTAL processing time: {:?}",
-                    frame_id,
-                    total_time
-                );
+            if let Err(e) = tx_clone.send(Some(event)) {
+                log::error!("Failed to send frame event: {}", e);
             }
         };
         set_callback(device_id.clone(), callback)
@@ -263,11 +99,9 @@ impl<R: Runtime> Camera<R> {
 
         let session_id = uuid::Uuid::new_v4().to_string();
         let active_stream = ActiveStream {
-            camera_id: device_id.clone(), // Use device_id, not camera (which is the status message)
+            camera_id: device_id.clone(),
             start_time: Instant::now(),
-            _frame_counter: frame_counter,
-            _channel: channel,
-            running,
+            rx,
         };
 
         self.active_streams
@@ -278,23 +112,16 @@ impl<R: Runtime> Camera<R> {
         Ok(session_id)
     }
 
-    pub async fn stop_stream(&self, session_id: String) -> Result<()> {
+    pub async fn stop_streaming(&self, session_id: String) -> Result<()> {
         log::info!(" Stopping stream with session_id: {}", session_id);
 
         // First, signal the callback to stop processing frames
-        let stream = {
-            let mut streams = self.active_streams.lock().await;
-            if let Some(stream) = streams.get(&session_id) {
-                // Mark stream as stopped to prevent new frames from being processed
-                stream
-                    .running
-                    .store(false, std::sync::atomic::Ordering::Release);
-                log::info!(" Marked stream {} as stopped", session_id);
-            }
-            streams
-                .remove(&session_id)
-                .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?
-        };
+        let stream = self
+            .active_streams
+            .lock()
+            .await
+            .remove(&session_id)
+            .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?;
 
         log::info!(
             " Stream stopped for camera: {} (ran for {:?})",
@@ -329,4 +156,96 @@ impl<R: Runtime> Camera<R> {
 
         Ok(())
     }
+
+    /// Get a copy of the receiver for a specific device_id
+    /// Returns a watch receiver for consuming frame events from this device
+    pub async fn get_receiver_by_device_id(
+        &self,
+        device_id: &str,
+    ) -> Result<watch::Receiver<Option<FrameEvent>>> {
+        let streams = self.active_streams.lock().await;
+
+        for active_stream in streams.values() {
+            if active_stream.camera_id == device_id {
+                return Ok(active_stream.rx.clone());
+            }
+        }
+
+        Err(Error::StreamNotFound(format!(
+            "No active stream for device: {}",
+            device_id
+        )))
+    }
+
+    /// Connect a camera stream to a WebRTC connection
+    /// This spawns a background task that:
+    /// 1. Gets the receiver from the camera stream
+    /// 2. Encodes frames to H.264
+    /// 3. Pushes encoded frames to the WebRTC track
+    pub async fn connect_camera_to_webrtc(
+        &self,
+        device_id: String,
+        connection_id: String,
+    ) -> Result<()> {
+        // Ensure track is attached to the connection
+        self.webrtc_manager
+            .attach_receiver_to_connection(&connection_id)
+            .await?;
+
+        // Get a receiver for this device
+        let mut receiver = self.get_receiver_by_device_id(&device_id).await?;
+
+        // Clone manager for the background task
+        let webrtc_manager = self.webrtc_manager.clone();
+        let connection_id_clone = connection_id.clone();
+
+        // Spawn background task to consume frames and push to WebRTC
+        tokio::spawn(async move {
+            log::info!(
+                "WebRTC encoding task started for connection: {} from device: {}",
+                connection_id,
+                device_id
+            );
+
+            while receiver.changed().await.is_ok() {
+                // Clone the current frame out of the watch ref so no borrow lives across await
+                let maybe_frame = { receiver.borrow_and_update().clone() };
+
+                match maybe_frame {
+                    Some(frame) => {
+                        // Accept only I420 for now; skip unsupported formats
+
+                        match yuv_to_h264(&frame.data, frame.width, frame.height) {
+                            Ok(h264) => {
+                                // Assume ~30fps -> 33ms duration per frame
+                                if let Err(e) = webrtc_manager
+                                    .push_h264_sample(&connection_id_clone, h264, 33)
+                                    .await
+                                {
+                                    log::error!("Failed to push H.264 sample: {}", e);
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Failed to encode frame to H.264: {}", e);
+                                break;
+                            }
+                        }
+                    }
+                    None => {
+                        continue;
+                    }
+                }
+            }
+
+            log::info!(
+                "WebRTC encoding task stopped for connection: {}",
+                connection_id
+            );
+        });
+
+        Ok(())
+    }
+
+    // Streaming methods removed to support WebRTC-based frontend streaming
 }

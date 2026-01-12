@@ -140,7 +140,20 @@ pub async fn add_ice_candidate<R: Runtime>(
 /// Close peer connection
 #[command]
 pub async fn close_connection<R: Runtime>(app: AppHandle<R>, connection_id: String) -> Result<()> {
-    let manager = &app.camera().webrtc_manager;
+    let camera = app.camera();
+    let manager = &camera.webrtc_manager;
+
+    // Find and stop the stream linked to this connection
+    if let Some(stream_id) = manager.get_stream_for_connection(&connection_id).await {
+        log::info!(
+            "Closing connection {} with linked stream {}",
+            connection_id,
+            stream_id
+        );
+        camera.stop_streaming(stream_id).await?;
+    }
+
+    // Close the peer connection
     manager.remove_connection(&connection_id).await
 }
 
@@ -177,7 +190,13 @@ pub async fn start_camera_webrtc_session<R: Runtime>(
 
     // Attach H.264 video track so SDP advertises video
     manager.attach_h264_video_track(&connection_id).await?;
-    camera.start_streaming(device_id.clone()).await?;
+    let stream_id = camera.start_streaming(device_id.clone()).await?;
+
+    // Register stream_id for this connection (for cleanup on close)
+    manager
+        .register_stream_for_connection(connection_id.clone(), stream_id)
+        .await?;
+
     // Lancer le streaming caméra et lier au track WebRTC
     camera
         .connect_camera_to_webrtc(device_id, connection_id.clone())

@@ -39,6 +39,7 @@ pub struct WebRTCManager {
     connections: Arc<AsyncMutex<HashMap<String, Arc<PeerConnection>>>>,
     streams: Arc<AsyncMutex<HashMap<String, Arc<VideoStream>>>>, // Active video streams
     connection_to_device: Arc<AsyncMutex<HashMap<String, String>>>, // Map connection_id -> device_id
+    connection_to_stream: Arc<AsyncMutex<HashMap<String, String>>>, // Map connection_id -> stream_id
 }
 
 impl WebRTCManager {
@@ -47,6 +48,7 @@ impl WebRTCManager {
             connections: Arc::new(AsyncMutex::new(HashMap::new())),
             streams: Arc::new(AsyncMutex::new(HashMap::new())),
             connection_to_device: Arc::new(AsyncMutex::new(HashMap::new())),
+            connection_to_stream: Arc::new(AsyncMutex::new(HashMap::new())),
         }
     }
 
@@ -66,6 +68,28 @@ impl WebRTCManager {
     /// Get the device_id for a connection
     pub async fn get_device_for_connection(&self, connection_id: &str) -> Option<String> {
         self.connection_to_device
+            .lock()
+            .await
+            .get(connection_id)
+            .cloned()
+    }
+
+    /// Register stream_id for a connection (for cleanup on close)
+    pub async fn register_stream_for_connection(
+        &self,
+        connection_id: String,
+        stream_id: String,
+    ) -> Result<()> {
+        self.connection_to_stream
+            .lock()
+            .await
+            .insert(connection_id, stream_id);
+        Ok(())
+    }
+
+    /// Get the stream_id for a connection
+    pub async fn get_stream_for_connection(&self, connection_id: &str) -> Option<String> {
+        self.connection_to_stream
             .lock()
             .await
             .get(connection_id)
@@ -141,13 +165,10 @@ impl WebRTCManager {
         }
 
         self.connection_to_device.lock().await.remove(id);
+        self.connection_to_stream.lock().await.remove(id);
 
         if let Some(dev_id) = device_id {
-            log::info!(
-                "Closed connection {}, associated device {} (caller should clean up streaming)",
-                id,
-                dev_id
-            );
+            log::info!("Closed connection {}, associated device {}", id, dev_id);
         }
         Ok(())
     }

@@ -16,3 +16,9 @@ node_modules/
 # Keep dist-js for package distribution
 dist-js
 
+# Example builds
+examples/*/dist
+examples/*/target
+examples/*/src-tauri/target
+examples/*/node_modules
+

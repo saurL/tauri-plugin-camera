@@ -112,16 +112,16 @@ impl<R: Runtime> Camera<R> {
         Ok(session_id)
     }
 
-    pub async fn stop_streaming(&self, session_id: String) -> Result<()> {
-        log::info!(" Stopping stream with session_id: {}", session_id);
+    pub async fn stop_streaming(&self, stream_id: String) -> Result<()> {
+        log::info!(" Stopping stream with stream_id: {}", stream_id);
 
         // First, signal the callback to stop processing frames
         let stream = self
             .active_streams
             .lock()
             .await
-            .remove(&session_id)
-            .ok_or_else(|| Error::StreamNotFound(session_id.clone()))?;
+            .remove(&stream_id)
+            .ok_or_else(|| Error::StreamNotFound(stream_id.clone()))?;
 
         log::info!(
             " Stream stopped for camera: {} (ran for {:?})",

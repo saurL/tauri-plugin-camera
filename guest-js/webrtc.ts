@@ -1,9 +1,20 @@
 import { invoke } from '@tauri-apps/api/core'
 
-// Types mirrored from Rust (src/models.rs)
+// Types mirrored from CrabCamera (crabcamera::CameraDeviceInfo)
+export interface CameraFormat {
+  width: number
+  height: number
+  fps: number
+  format_type: string
+}
+
 export interface CameraDeviceInfo {
-  deviceId: string
-  label: string
+  id: string
+  name: string
+  description: string
+  is_available: boolean
+  supports_formats: CameraFormat[]
+  platform: string
 }
 
 // Types mirrored from Rust (src/webrtc.rs)

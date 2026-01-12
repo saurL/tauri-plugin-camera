@@ -21,8 +21,9 @@ pub async fn create_offer<R: Runtime>(
         .into_iter()
         .map(|server| RTCIceServer {
             urls: server.urls,
-            username: server.username,
-            credential: server.credential,
+            // The upstream webrtc type expects Strings, not Options.
+            username: server.username.unwrap_or("".to_string()),
+            credential: server.credential.unwrap_or("".to_string()),
             ..Default::default()
         })
         .collect();
@@ -165,17 +166,6 @@ pub async fn start_camera_webrtc_session<R: Runtime>(
     let camera = app.camera();
     // Initialize camera system (idempotent)
     camera.initialize().await?;
-
-    // Create peer connection
-    let ice_servers: Vec<RTCIceServer> = ice_servers
-        .into_iter()
-        .map(|server| RTCIceServer {
-            urls: server.urls,
-            username: server.username,
-            credential: server.credential,
-            ..Default::default()
-        })
-        .collect();
 
     let manager = &camera.webrtc_manager;
     let connection_id = manager.create_peer_connection(ice_servers).await?;

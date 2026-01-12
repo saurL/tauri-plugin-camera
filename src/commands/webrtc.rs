@@ -7,12 +7,12 @@ use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-/// Create an offer
+/// Create an offer and return (SDP, connection_id)
 #[command]
 pub async fn create_offer<R: Runtime>(
     app: AppHandle<R>,
     request: CreatePeerConnectionRequest,
-) -> Result<SessionDescriptionData> {
+) -> Result<(SessionDescriptionData, String)> {
     let manager = &app.camera().webrtc_manager;
 
     // Convert ice servers
@@ -44,10 +44,13 @@ pub async fn create_offer<R: Runtime>(
         .await
         .map_err(|e| Error::CameraError(format!("Failed to set local description: {}", e)))?;
 
-    Ok(SessionDescriptionData {
-        sdp_type: offer.sdp_type.to_string(),
-        sdp: offer.sdp,
-    })
+    Ok((
+        SessionDescriptionData {
+            sdp_type: offer.sdp_type.to_string(),
+            sdp: offer.sdp,
+        },
+        connection_id,
+    ))
 }
 
 /// Create an answer

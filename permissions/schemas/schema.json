@@ -295,6 +295,54 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the add_ice_candidate command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-add-ice-candidate",
+          "markdownDescription": "Enables the add_ice_candidate command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the add_ice_candidate command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-add-ice-candidate",
+          "markdownDescription": "Denies the add_ice_candidate command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the close_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-close-connection",
+          "markdownDescription": "Enables the close_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the close_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-close-connection",
+          "markdownDescription": "Denies the close_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the create_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-create-answer",
+          "markdownDescription": "Enables the create_answer command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the create_answer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-create-answer",
+          "markdownDescription": "Denies the create_answer command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the create_offer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-create-offer",
+          "markdownDescription": "Enables the create_offer command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the create_offer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-create-offer",
+          "markdownDescription": "Denies the create_offer command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_available_cameras command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-available-cameras",
@@ -305,6 +353,18 @@
           "type": "string",
           "const": "deny-get-available-cameras",
           "markdownDescription": "Denies the get_available_cameras command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_connection_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-get-connection-state",
+          "markdownDescription": "Enables the get_connection_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_connection_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-get-connection-state",
+          "markdownDescription": "Denies the get_connection_state command without any pre-configured scope."
         },
         {
           "description": "Enables the initialize command without any pre-configured scope.",
@@ -329,6 +389,30 @@
           "type": "string",
           "const": "deny-request-camera-permission",
           "markdownDescription": "Denies the request_camera_permission command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_remote_description command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-remote-description",
+          "markdownDescription": "Enables the set_remote_description command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_remote_description command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-remote-description",
+          "markdownDescription": "Denies the set_remote_description command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_camera_webrtc_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-start-camera-webrtc-session",
+          "markdownDescription": "Enables the start_camera_webrtc_session command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_camera_webrtc_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-start-camera-webrtc-session",
+          "markdownDescription": "Denies the start_camera_webrtc_session command without any pre-configured scope."
         },
         {
           "description": "Enables the start_streaming command without any pre-configured scope.",

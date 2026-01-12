@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-add-ice-candidate"
+description = "Enables the add_ice_candidate command without any pre-configured scope."
+commands.allow = ["add_ice_candidate"]
+
+[[permission]]
+identifier = "deny-add-ice-candidate"
+description = "Denies the add_ice_candidate command without any pre-configured scope."
+commands.deny = ["add_ice_candidate"]

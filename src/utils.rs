@@ -1,3 +1,4 @@
+use openh264::{encoder::Encoder, formats::YUVSlices};
 use yuv::{YuvBiPlanarImage, YuvConversionMode, YuvPlanarImage, YuvRange, YuvStandardMatrix};
 
 /// Utility functions for image format conversion and processing
@@ -135,6 +136,55 @@ pub fn nv12_to_rgba(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>>
     .map_err(|e| Error::CameraError(format!("NV12 to RGB conversion failed: {:?}", e)))?;
 
     Ok(rgb_data)
+}
+
+/// Encode a YUV420 (I420) frame into H.264 using OpenH264
+///
+/// # Arguments
+/// * `yuv_data` - Input YUV420 planar buffer (Y, U, V)
+/// * `width` - Frame width in pixels
+/// * `height` - Frame height in pixels
+///
+/// # Returns
+/// A `Vec<u8>` containing the H.264 Annex B bitstream (SPS/PPS + frame NALs)
+pub fn yuv_to_h264(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    let width_usize = width as usize;
+    let height_usize = height as usize;
+
+    // Validate input buffer size for I420 format (Y + U + V)
+    let expected_size = width_usize * height_usize * 3 / 2;
+    if yuv_data.len() < expected_size {
+        return Err(Error::CameraError(format!(
+            "Invalid YUV buffer size: expected at least {}, got {}",
+            expected_size,
+            yuv_data.len()
+        )));
+    }
+
+    // Split planes: Y [w*h], U [w*h/4], V [w*h/4]
+    let y_plane_size = width_usize * height_usize;
+    let uv_plane_size = y_plane_size / 4;
+    let (y_plane, rest) = yuv_data.split_at(y_plane_size);
+    let (u_plane, v_plane) = rest.split_at(uv_plane_size);
+
+    let chroma_width = width_usize / 2;
+
+    // Wrap as YUVSlices (4:2:0), using tight strides
+    let yuv = YUVSlices::new(
+        (y_plane, u_plane, v_plane),
+        (width_usize, height_usize),
+        (width_usize, chroma_width, chroma_width),
+    );
+
+    // Create encoder with default config and encode one frame
+    let mut encoder = Encoder::new()
+        .map_err(|e| Error::CameraError(format!("Failed to create OpenH264 encoder: {}", e)))?;
+
+    let bitstream = encoder
+        .encode(&yuv)
+        .map_err(|e| Error::CameraError(format!("Failed to encode frame: {}", e)))?;
+
+    Ok(bitstream.to_vec())
 }
 
 #[cfg(test)]

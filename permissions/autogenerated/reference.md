@@ -9,10 +9,10 @@ Default permissions for the plugin
 - `allow-start-streaming`
 - `allow-stop-streaming`
 - `allow-initialize`
-- `allow-start_camera_webrtc_session`
-- `allow-set_remote_description`
-- `allow-add_ice_candidate`
-- `allow-close_connection`
+- `allow-start-camera-webrtc-session`
+- `allow-set-remote-description`
+- `allow-add-ice-candidate`
+- `allow-close-connection`
 
 ## Permission Table
 

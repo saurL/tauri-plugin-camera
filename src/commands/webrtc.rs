@@ -21,8 +21,8 @@ pub async fn create_offer<R: Runtime>(
         .into_iter()
         .map(|server| RTCIceServer {
             urls: server.urls,
-            username: server.username.unwrap_or_default(),
-            credential: server.credential.unwrap_or_default(),
+            username: server.username,
+            credential: server.credential,
             ..Default::default()
         })
         .collect();

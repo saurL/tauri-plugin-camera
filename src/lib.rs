@@ -18,6 +18,7 @@ mod utils;
 mod webrtc;
 use commands::*;
 pub use error::{Error, Result};
+pub use utils::*;
 
 #[cfg(desktop)]
 use desktop::Camera;

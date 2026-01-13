@@ -183,38 +183,49 @@ console.log(`${info.fps} FPS`);
 stream.stop();
 ```
 
-### Rendering Utilities
-
-#### `renderFrameToCanvas(canvas: HTMLCanvasElement, frame: FrameEvent, options?: RenderOptions): void`
-
-Manually render a frame to a canvas element.
-
-```typescript
-renderFrameToCanvas(canvas, frame, {
-  autoResize: true,
-  flipHorizontal: true,
-  flipVertical: false,
-});
-```
-
-#### `frameToDataURL(frame: FrameEvent): string`
-
-Convert a frame to a data URL (base64).
-
-```typescript
-const dataURL = frameToDataURL(frame);
-document.getElementById("img").src = dataURL;
-```
-
-#### `downloadFrame(frame: FrameEvent, filename?: string): void`
-
-Download a frame as an image file.
-
-```typescript
-downloadFrame(frame, "photo.png");
-```
-
 ## TypeScript Types
+
+## Rust-side Streaming (without WebRTC)
+
+You can start a camera stream and consume raw frames directly from Rust without creating a WebRTC connection. This uses the plugin state to open the camera, then reads frames from a `watch::Receiver` of `FrameEvent`.
+
+```rust
+use tauri::AppHandle;
+use tauri_plugin_camera::{CameraExt, Result};
+
+pub async fn stream_and_process(handle: AppHandle, device_id: &str) -> Result<()> {
+  let camera = handle.camera();
+
+  // 1) Start streaming the camera (returns a session_id)
+  let _session_id = camera.start_streaming(device_id.to_string()).await?;
+
+  // 2) Get a frame receiver for this device
+  let mut rx = camera.get_receiver_by_device_id(device_id).await?;
+
+  // 3) Consume frames as they arrive
+  while rx.changed().await.is_ok() {
+    let frame = rx.borrow().clone();
+    if let Some(frame) = frame {
+      // frame.data is raw YUV/RGB (depending on platform);
+      // width/height/format describe the buffer layout.
+      do_something_with(frame);
+    }
+  }
+
+  Ok(())
+}
+
+fn do_something_with(_frame: tauri_plugin_camera::models::FrameEvent) {
+  // e.g., feed into an encoder, write to disk, run CV, etc.
+}
+```
+
+Key points:
+
+- `start_streaming(device_id)` opens the camera and starts pushing frames you can call it even if a stream is already active for that device.
+- `get_receiver_by_device_id(device_id)` returns a `watch::Receiver<Option<FrameEvent>>` you can await on.
+- Frames are delivered on the Rust side; you can process, transcode, or forward them as needed.
+- Call `stop_streaming(session_id)` when done to release the camera.
 
 ```typescript
 interface CameraDeviceInfo {

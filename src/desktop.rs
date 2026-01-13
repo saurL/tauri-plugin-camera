@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 use crate::models::FrameEvent;
-use crate::utils::yuv_to_h264;
+use crate::utils::yuv_nv12_to_h264;
 use crabcamera::init::initialize_camera_system;
 use crabcamera::permissions::PermissionInfo;
 use crabcamera::{get_available_cameras, request_camera_permission};
@@ -63,9 +63,9 @@ impl<R: Runtime> Camera<R> {
         // Check if streaming is already active for this device
         {
             let streams = self.active_streams.lock().await;
-            for active_stream in streams.values() {
+            for (session_id, active_stream) in streams.iter() {
                 if active_stream.camera_id == device_id {
-                    return Err(Error::StreamingAlreadyActive(device_id));
+                    return Ok(session_id.clone());
                 }
             }
         }
@@ -177,6 +177,22 @@ impl<R: Runtime> Camera<R> {
         )))
     }
 
+    /// Get a copy of the receiver for a specific stream session ID
+    /// Returns a watch receiver for consuming frame events from this stream
+    pub async fn get_receiver_by_stream_id(
+        &self,
+        stream_id: &str,
+    ) -> Result<watch::Receiver<Option<FrameEvent>>> {
+        let streams = self.active_streams.lock().await;
+
+        streams
+            .get(stream_id)
+            .map(|stream| stream.rx.clone())
+            .ok_or_else(|| {
+                Error::StreamNotFound(format!("No active stream with ID: {}", stream_id))
+            })
+    }
+
     /// Connect a camera stream to a WebRTC connection
     /// This spawns a background task that:
     /// 1. Gets the receiver from the camera stream
@@ -213,9 +229,9 @@ impl<R: Runtime> Camera<R> {
 
                 match maybe_frame {
                     Some(frame) => {
-                        // Accept only I420 for now; skip unsupported formats
+                        // Encode NV12 frame to H.264
 
-                        match yuv_to_h264(&frame.data, frame.width, frame.height) {
+                        match yuv_nv12_to_h264(&frame.data, frame.width, frame.height) {
                             Ok(h264) => {
                                 // Assume ~30fps -> 33ms duration per frame
                                 if let Err(e) = webrtc_manager

@@ -138,33 +138,74 @@ pub fn nv12_to_rgba(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>>
     Ok(rgb_data)
 }
 
-/// Encode a YUV420 (I420) frame into H.264 using OpenH264
+/// Convert NV12 to I420 format (de-interleave UV plane)
 ///
 /// # Arguments
-/// * `yuv_data` - Input YUV420 planar buffer (Y, U, V)
+/// * `nv12_data` - Input NV12 buffer (Y plane + interleaved UV plane)
+/// * `width` - Frame width in pixels
+/// * `height` - Frame height in pixels
+///
+/// # Returns
+/// I420 buffer (Y plane + U plane + V plane)
+fn nv12_to_i420(nv12_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    let width_usize = width as usize;
+    let height_usize = height as usize;
+
+    let y_plane_size = width_usize * height_usize;
+    let uv_plane_size = y_plane_size / 4;
+
+    // Validate input
+    let expected_size = y_plane_size + uv_plane_size * 2;
+    if nv12_data.len() < expected_size {
+        return Err(Error::CameraError(format!(
+            "Invalid NV12 buffer size: expected at least {}, got {}",
+            expected_size,
+            nv12_data.len()
+        )));
+    }
+
+    // Allocate I420 buffer
+    let mut i420_data = Vec::with_capacity(expected_size);
+
+    // Copy Y plane (unchanged)
+    i420_data.extend_from_slice(&nv12_data[..y_plane_size]);
+
+    // De-interleave UV plane: UVUVUV... → UUU... VVV...
+    let uv_plane = &nv12_data[y_plane_size..];
+    let mut u_plane = Vec::with_capacity(uv_plane_size);
+    let mut v_plane = Vec::with_capacity(uv_plane_size);
+
+    for i in 0..uv_plane_size {
+        u_plane.push(uv_plane[i * 2]); // U values at even indices
+        v_plane.push(uv_plane[i * 2 + 1]); // V values at odd indices
+    }
+
+    i420_data.extend(u_plane);
+    i420_data.extend(v_plane);
+
+    Ok(i420_data)
+}
+
+/// Encode a NV12 frame into H.264 using OpenH264
+///
+/// # Arguments
+/// * `nv12_data` - Input NV12 buffer (Y plane + interleaved UV plane)
 /// * `width` - Frame width in pixels
 /// * `height` - Frame height in pixels
 ///
 /// # Returns
 /// A `Vec<u8>` containing the H.264 Annex B bitstream (SPS/PPS + frame NALs)
-pub fn yuv_to_h264(yuv_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+pub fn yuv_nv12_to_h264(nv12_data: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     let width_usize = width as usize;
     let height_usize = height as usize;
 
-    // Validate input buffer size for I420 format (Y + U + V)
-    let expected_size = width_usize * height_usize * 3 / 2;
-    if yuv_data.len() < expected_size {
-        return Err(Error::CameraError(format!(
-            "Invalid YUV buffer size: expected at least {}, got {}",
-            expected_size,
-            yuv_data.len()
-        )));
-    }
+    // Convert NV12 to I420 first
+    let i420_data = nv12_to_i420(nv12_data, width, height)?;
 
-    // Split planes: Y [w*h], U [w*h/4], V [w*h/4]
+    // Split I420 planes: Y [w*h], U [w*h/4], V [w*h/4]
     let y_plane_size = width_usize * height_usize;
     let uv_plane_size = y_plane_size / 4;
-    let (y_plane, rest) = yuv_data.split_at(y_plane_size);
+    let (y_plane, rest) = i420_data.split_at(y_plane_size);
     let (u_plane, v_plane) = rest.split_at(uv_plane_size);
 
     let chroma_width = width_usize / 2;

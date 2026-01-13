@@ -30,10 +30,11 @@ async function listCameras() {
 
       const deviceEl = document.createElement("div");
       deviceEl.className = "camera-item";
+      const formatsList = device.supports_formats.map(f => `${f.width}x${f.height}@${f.fps}fps (${f.format_type})`).join(', ');
       deviceEl.innerHTML = `
         <strong>${device.name}</strong><br>
         <small>${device.description} - ID: ${device.id}</small><br>
-        <small>Formats: ${device.supports_formats.map(f => `${f.width}x${f.height}@${f.fps}fps`).join(', ')}</small>
+        <small>Formats: ${formatsList}</small>
       `;
       cameraList.appendChild(deviceEl);
     });
@@ -93,7 +94,7 @@ async function startStream() {
     peerConnection.ontrack = (event) => {
       if (videoElement && event.streams[0]) {
         videoElement.srcObject = event.streams[0];
-        status.textContent = "Stream connected successfully!";
+        status.textContent = `Stream connected successfully! Format: NV12`;
       }
     };
 

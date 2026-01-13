@@ -1,8 +1,4 @@
-use openh264::{
-    decoder::Decoder,
-    encoder::Encoder,
-    formats::{YUVSlices, YUVSource},
-};
+use openh264::{encoder::Encoder, formats::YUVSlices};
 use yuv::{YuvBiPlanarImage, YuvConversionMode, YuvPlanarImage, YuvRange, YuvStandardMatrix};
 
 /// Utility functions for image format conversion and processing
